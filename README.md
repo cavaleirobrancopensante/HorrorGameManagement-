@@ -15,8 +15,16 @@ Pages must be switched on once: repository Settings, Pages, Source: GitHub Actio
 ## Controls
 
 - Computer: WASD to move, mouse to look (click to start), E or left click to use,
-  F for the torch, Esc to pause.
-- Phone: left thumb moves, drag on the right to look, buttons for Use, Torch and Pause.
+  F for the torch, C to plan the day, Esc to pause.
+- Phone: left thumb moves, drag on the right to look, buttons for Use, Torch, Day and Pause.
+
+## Calendar
+
+The game starts on Saturday 15 January 2050 at 20:00. Each day has six
+four-hour shifts: morning, noon, afternoon, evening, night and the dead shift.
+Play a shift freely, or spend it on work, rest, sleep, prayer or Mass from the
+day planner (wall calendar, C, or the Day button). Missing Sunday Mass costs the
+state of grace; the Saturday evening vigil counts.
 
 ## Tests
 

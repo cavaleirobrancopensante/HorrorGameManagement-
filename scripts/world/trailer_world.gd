@@ -450,6 +450,24 @@ func _build_home() -> void:
 	_span(Vector3(6.66, 1.51, 0.03), Vector3(7.34, 1.89, 0.035), _c("#6d2a2d"), false)
 	_span(Vector3(6.95, 1.62, 0.035), Vector3(7.05, 1.74, 0.04), _c("#d7bd6a"), false)
 
+	# Wall calendar beside the door.
+	_span(Vector3(6.04, 1.2, 0.3), Vector3(6.05, 1.85, 0.8), _c("#d9d1bb"), false)
+	_span(Vector3(6.05, 1.62, 0.33), Vector3(6.055, 1.82, 0.77), _c("#6d2a2d"), false)
+	var month := Label3D.new()
+	month.text = "JANUARY 2050"
+	month.font = UiKit.body_font()
+	month.font_size = 36
+	month.pixel_size = 0.0011
+	month.modulate = Color("#efe0bf")
+	month.outline_size = 0
+	month.position = Vector3(6.058, 1.72, 0.55)
+	month.rotation_degrees.y = 90.0
+	add_child(month)
+	for row in 5:
+		for col in 7:
+			_span(Vector3(6.05, 1.55 - row * 0.065, 0.35 + col * 0.06), Vector3(6.053, 1.5 - row * 0.065, 0.39 + col * 0.06), _c("#9c937d" if col > 0 else "#a3302c"), false)
+	_zone(Vector3(6.04, 1.15, 0.25), Vector3(6.14, 1.9, 0.85), "calendar")
+
 	# Bed under the window.
 	_span(Vector3(7.3, 0.0, 2.3), Vector3(9.3, 0.3, WIDTH), wood, false)
 	_span(Vector3(7.32, 0.3, 2.32), Vector3(9.28, 0.48, 3.18), _m("mattress"), false)

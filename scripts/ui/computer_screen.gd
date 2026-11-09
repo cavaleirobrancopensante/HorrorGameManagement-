@@ -275,7 +275,7 @@ func _order(id: String) -> void:
 
 func _build_news() -> void:
 	var day := Survival.day_of(Survival.now(game.save))
-	_content.add_child(UiKit.label("Civic News, day %d" % day, 30, PHOSPHOR))
+	_content.add_child(UiKit.label("Civic News, %s" % Survival.date_text(Survival.now(game.save), true), 30, PHOSPHOR))
 	var lean := int(game.save["soul"].get("horror_lean", 0))
 	var first := true
 	for line: String in Survival.headlines(day, lean):

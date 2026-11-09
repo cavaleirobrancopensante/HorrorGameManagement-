@@ -4,7 +4,11 @@ extends RefCounted
 ## rules run in the game and in the tests.
 
 const MINUTES_PER_SECOND := 1.0
+## Unix time of day 1: Saturday 15 January 2050.
+const START_UNIX := 2525817600
 const START_MINUTE := 20 * 60
+const SHIFT_MINUTES := 240.0
+const FIRST_SHIFT_MINUTE := 6 * 60
 const WAKE_MINUTE := 7 * 60
 const DAY := 1440.0
 ## Change per game hour while awake and while asleep.
@@ -29,6 +33,10 @@ static func ensure(save: Dictionary) -> void:
 		world["hatch_open"] = false
 	if not world.has("candle_day"):
 		world["candle_day"] = 0
+	if not (world.get("mass_days") is Array):
+		world["mass_days"] = []
+	if not (world.get("notices") is Array):
+		world["notices"] = []
 	if not (save.get("soul") is Dictionary):
 		save["soul"] = {"state_of_grace": true, "horror_lean": 0}
 	if not (save.get("survival") is Dictionary):
@@ -106,9 +114,9 @@ static func money(save: Dictionary) -> int:
 
 
 ## Moves the clock on. Returns the cause of death, or "" if still alive.
-static func advance(save: Dictionary, minutes: float, sleeping := false) -> String:
+static func advance(save: Dictionary, minutes: float, rates: Dictionary = RATES) -> String:
 	var hours := minutes / 60.0
-	var rates: Dictionary = SLEEP_RATES if sleeping else RATES
+	var day_before := day_of(now(save))
 	for id: String in rates:
 		change_need(save, id, float(rates[id]) * hours)
 	var cause := ""
@@ -121,6 +129,8 @@ static func advance(save: Dictionary, minutes: float, sleeping := false) -> Stri
 			cause = "Starved to death."
 	save["world"]["time"] = now(save) + minutes
 	save["day"] = day_of(now(save))
+	for day in range(day_before, int(save["day"])):
+		_end_of_day(save, day)
 	if health(save) <= 0.0:
 		return cause if not cause.is_empty() else "Died."
 	return ""
@@ -135,7 +145,158 @@ static func sleep_minutes(save: Dictionary) -> float:
 
 
 static func sleep(save: Dictionary) -> String:
-	return advance(save, sleep_minutes(save), true)
+	return advance(save, sleep_minutes(save), SLEEP_RATES)
+
+
+## A Sunday ending without Mass costs the state of grace.
+static func _end_of_day(save: Dictionary, day: int) -> void:
+	if weekday_of_day(day) != 0 or attended_mass(save, day):
+		return
+	save["soul"]["state_of_grace"] = false
+	change_lean(save, 3)
+	notify(save, "You missed Sunday Mass. You are no longer in a state of grace.")
+
+
+static func notify(save: Dictionary, text: String) -> void:
+	(save["world"]["notices"] as Array).append(text)
+
+
+## Messages from the rules for the game to show, oldest first.
+static func take_notices(save: Dictionary) -> Array:
+	var notices: Array = save["world"]["notices"]
+	var copy := notices.duplicate()
+	notices.clear()
+	return copy
+
+
+# Calendar ---------------------------------------------------------------------
+
+static func date_of_day(day: int) -> Dictionary:
+	return Time.get_datetime_dict_from_unix_time(START_UNIX + (day - 1) * 86400)
+
+
+## 0 is Sunday.
+static func weekday_of_day(day: int) -> int:
+	return int(date_of_day(day)["weekday"])
+
+
+static func weekday(minutes: float) -> int:
+	return weekday_of_day(day_of(minutes))
+
+
+static func date_text(minutes: float, long := false) -> String:
+	var date := date_of_day(day_of(minutes))
+	var weekday_name: String = GameData.WEEKDAYS[int(date["weekday"])]
+	var month: String = GameData.MONTHS[int(date["month"]) - 1]
+	if long:
+		return "%s %d %s %d" % [weekday_name, date["day"], month, date["year"]]
+	return "%s %d %s %d" % [weekday_name.left(3), date["day"], month.left(3), date["year"]]
+
+
+## 0 morning, 1 noon, 2 afternoon, 3 evening, 4 night, 5 dead shift.
+static func shift_index(minutes: float) -> int:
+	return int(fposmod(minutes - FIRST_SHIFT_MINUTE, DAY) / SHIFT_MINUTES)
+
+
+static func shift_name(minutes: float) -> String:
+	return GameData.SHIFTS[shift_index(minutes)]
+
+
+## When the current shift ends.
+static func shift_end(minutes: float) -> float:
+	return minutes - fposmod(minutes - FIRST_SHIFT_MINUTE, SHIFT_MINUTES) + SHIFT_MINUTES
+
+
+static func shift_hours_text(index: int) -> String:
+	var start := (FIRST_SHIFT_MINUTE + index * int(SHIFT_MINUTES)) % int(DAY)
+	var end := (start + int(SHIFT_MINUTES)) % int(DAY)
+	return "%02d:00 to %02d:00" % [start / 60, end / 60]
+
+
+# Mass -------------------------------------------------------------------------
+
+## The Sunday that Mass right now would count for, or -1 if there is no Mass.
+## Saturday evening is the vigil of Sunday.
+static func mass_sunday(minutes: float) -> int:
+	var day := day_of(minutes)
+	var shift := shift_index(minutes)
+	var wd := weekday(minutes)
+	if wd == 0 and shift in [0, 1, 3]:
+		return day
+	if wd == 6 and shift == 3:
+		return day + 1
+	return -1
+
+
+static func attended_mass(save: Dictionary, sunday: int) -> bool:
+	for day: Variant in save["world"]["mass_days"]:
+		if int(day) == sunday:
+			return true
+	return false
+
+
+# Spending a shift -------------------------------------------------------------
+
+## Why an activity cannot be chosen now, or "" if it can.
+static func activity_blocked(save: Dictionary, id: String) -> String:
+	match id:
+		"work":
+			if stock(save, "sausages") <= 0 or stock(save, "buns") <= 0:
+				return "No sausages or rolls in stock."
+		"mass":
+			var sunday := mass_sunday(now(save))
+			if sunday < 0:
+				return "No Mass now."
+			if attended_mass(save, sunday):
+				return "You have already been to Mass for this Sunday."
+	return ""
+
+
+## Spends the rest of the current shift on an activity. Returns
+## {"cause": death cause or "", "text": what happened}.
+static func spend_shift(save: Dictionary, id: String, character: PlayerCharacter, rng: RandomNumberGenerator) -> Dictionary:
+	var start := now(save)
+	var minutes := shift_end(start) - start
+	var activity := GameData.activity_def(id)
+	var shift_label: String = shift_name(start).to_lower()
+	var text := ""
+	match id:
+		"work":
+			text = _work(save, minutes, character, rng)
+		"rest":
+			text = "You rest through the %s." % shift_label
+		"sleep":
+			text = "You sleep through the %s." % shift_label
+		"rosary":
+			text = "You pray the rosary at the home altar."
+		"mass":
+			(save["world"]["mass_days"] as Array).append(mass_sunday(start))
+			text = "You hear Mass at St. Brigid's. A state drone followed you there and back."
+	if activity.has("lean"):
+		change_lean(save, int(activity["lean"]))
+	var cause := advance(save, minutes, activity["rates"])
+	return {"cause": cause, "text": text}
+
+
+static func _work(save: Dictionary, minutes: float, character: PlayerCharacter, rng: RandomNumberGenerator) -> String:
+	var skill := (character.stat_value("cooking") + character.stat_value("charm") + character.stat_value("business")) / 30.0
+	var base: float = GameData.SHIFT_CUSTOMERS[shift_index(now(save))]
+	var customers := roundi(base * (minutes / SHIFT_MINUTES) * (0.6 + 0.5 * skill) * rng.randf_range(0.8, 1.2))
+	var sold := mini(customers, mini(stock(save, "sausages"), stock(save, "buns")))
+	take_stock(save, "sausages", sold)
+	take_stock(save, "buns", sold)
+	var cans := 0
+	for i in sold:
+		if rng.randf() < 0.4 and take_stock(save, "soda"):
+			cans += 1
+	var earned := sold * GameData.HOT_DOG_PRICE + cans * GameData.CAN_PRICE
+	save["survival"]["money"] = money(save) + earned
+	var text := "You sold %d hot dogs and %d cans for %d credits." % [sold, cans, earned]
+	var turned_away := customers - sold
+	if turned_away > 0:
+		change_need(save, "stress", turned_away * 1.5)
+		text += " %d customers left hungry: you ran out of stock." % turned_away
+	return text
 
 
 static func change_lean(save: Dictionary, delta: int) -> void:

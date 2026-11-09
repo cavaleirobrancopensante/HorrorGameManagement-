@@ -7,6 +7,7 @@ extends Control
 signal use_pressed
 signal light_pressed
 signal pause_pressed
+signal plan_pressed
 
 const STICK_RADIUS := 90.0
 const LOOK_SPEED := 0.0055
@@ -30,6 +31,7 @@ func _buttons() -> Dictionary:
 		"use": [Vector2(size.x - 140, size.y - 150), 74.0],
 		"light": [Vector2(size.x - 290, size.y - 85), 50.0],
 		"pause": [Vector2(size.x - 60, 52), 38.0],
+		"plan": [Vector2(size.x - 60, 140), 38.0],
 	}
 
 
@@ -79,6 +81,8 @@ func _press(finger: int, at: Vector2) -> void:
 					light_pressed.emit()
 				"pause":
 					pause_pressed.emit()
+				"plan":
+					plan_pressed.emit()
 			return
 	if at.x < size.x * 0.42 and _stick_finger == -1:
 		_stick_finger = finger
@@ -96,7 +100,7 @@ func _draw() -> void:
 	draw_circle(base + _stick_knob, 34.0, Color(UiKit.TALLOW, alpha))
 
 	var buttons := _buttons()
-	var labels := {"use": "Use", "light": "Torch", "pause": ""}
+	var labels := {"use": "Use", "light": "Torch", "pause": "", "plan": "Day"}
 	for id: String in buttons:
 		var spot: Array = buttons[id]
 		var center: Vector2 = spot[0]
@@ -108,4 +112,4 @@ func _draw() -> void:
 			draw_rect(Rect2(center + Vector2(-10, -12), Vector2(7, 24)), UiKit.TALLOW)
 			draw_rect(Rect2(center + Vector2(3, -12), Vector2(7, 24)), UiKit.TALLOW)
 		else:
-			draw_string(font, center + Vector2(-radius, 9), labels[id], HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, 26, UiKit.TALLOW)
+			draw_string(font, center + Vector2(-radius, 9), labels[id], HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, 26 if radius > 40.0 else 21, UiKit.TALLOW)

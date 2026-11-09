@@ -21,6 +21,9 @@ func _initialize() -> void:
 	_test_shop_and_deliveries()
 	_test_sleep()
 	_test_news()
+	_test_calendar()
+	_test_shifts()
+	_test_mass()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -221,6 +224,56 @@ func _test_news() -> void:
 	_check(GameData.NEWS_PERSECUTION.has(faithful[0]), "faithful see persecution")
 	var sinful := Survival.headlines(4, 50)
 	_check(GameData.NEWS_DEMONIC.has(sinful[0]), "sinful see the strange")
+
+
+func _test_calendar() -> void:
+	var save := _new_save()
+	var start := Survival.now(save)
+	_check(Survival.date_text(start) == "Sat 15 Jan 2050", "start date: %s" % Survival.date_text(start))
+	_check(Survival.date_text(start, true) == "Saturday 15 January 2050", "long date")
+	_check(Survival.weekday_of_day(2) == 0, "day 2 is Sunday")
+	_check(Survival.date_text(Survival.DAY * 17 + 600.0) == "Tue 1 Feb 2050", "month rolls over: %s" % Survival.date_text(Survival.DAY * 17 + 600.0))
+	_check(Survival.shift_name(start) == "Evening", "20:00 is evening")
+	_check(Survival.clock_text(Survival.shift_end(start)) == "22:00", "evening ends at 22:00")
+	_check(Survival.shift_name(3 * 60.0) == "Dead shift", "03:00 is the dead shift")
+	_check(Survival.shift_name(23 * 60.0) == "Night", "23:00 is night")
+	_check(Survival.clock_text(Survival.shift_end(23 * 60.0)) == "02:00", "night ends at 02:00")
+	_check(Survival.shift_name(6 * 60.0) == "Morning" and Survival.shift_name(10 * 60.0) == "Noon", "morning and noon")
+
+
+func _test_shifts() -> void:
+	var save := _new_save()
+	var character := PlayerCharacter.from_dict(save["character"])
+	var money := Survival.money(save)
+	var sausages := Survival.stock(save, "sausages")
+	var result := Survival.spend_shift(save, "work", character, _rng(3))
+	_check(result["cause"] == "", "working is safe")
+	_check(Survival.clock_text(Survival.now(save)) == "22:00", "work runs to the end of the shift")
+	_check(Survival.money(save) > money, "work earns money: %s" % result["text"])
+	_check(Survival.stock(save, "sausages") < sausages, "work uses stock")
+	var tired := Survival.need(save, "tiredness")
+	Survival.spend_shift(save, "sleep", character, _rng(3))
+	_check(Survival.need(save, "tiredness") < tired, "sleeping a shift rests")
+	_check(Survival.clock_text(Survival.now(save)) == "02:00", "night shift slept")
+	save["world"]["stock"]["sausages"] = 0
+	_check(Survival.activity_blocked(save, "work") != "", "no stock, no work")
+
+
+func _test_mass() -> void:
+	var save := _new_save()
+	var character := PlayerCharacter.from_dict(save["character"])
+	_check(Survival.mass_sunday(Survival.now(save)) == 2, "Saturday evening is the vigil")
+	Survival.spend_shift(save, "mass", character, _rng(1))
+	_check(Survival.attended_mass(save, 2), "vigil counts for Sunday")
+	_check(Survival.activity_blocked(save, "mass") != "", "no Mass at night")
+	Survival.advance(save, 2.0 * Survival.DAY)
+	_check(bool(save["soul"]["state_of_grace"]), "kept the Sunday obligation")
+	# A second character skips Mass.
+	var lazy := _new_save()
+	Survival.advance(lazy, 2.0 * Survival.DAY)
+	_check(not bool(lazy["soul"]["state_of_grace"]), "missing Mass loses grace")
+	_check(Survival.take_notices(lazy).size() == 1, "missed Mass notice")
+	_check(Survival.take_notices(lazy).is_empty(), "notices are taken once")
 
 
 func _test_damaged_file() -> void:

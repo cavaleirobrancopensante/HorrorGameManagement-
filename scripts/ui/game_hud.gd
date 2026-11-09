@@ -82,8 +82,9 @@ func _draw() -> void:
 
 	var right := size.x - (110.0 if touch_mode else 20.0)
 	var now := Survival.now(save)
-	_text(font, Vector2(right - 300, 40), "Day %d, %s" % [Survival.day_of(now), Survival.clock_text(now)], 26, UiKit.TALLOW, 300)
-	_text(font, Vector2(right - 300, 70), "%d credits" % Survival.money(save), 22, UiKit.LITURGICAL_GOLD, 300)
+	_text(font, Vector2(right - 340, 40), Survival.date_text(now), 26, UiKit.TALLOW, 340)
+	_text(font, Vector2(right - 340, 68), "%s, %s" % [Survival.shift_name(now), Survival.clock_text(now)], 22, UiKit.TALLOW, 340)
+	_text(font, Vector2(right - 340, 96), "%d credits" % Survival.money(save), 22, UiKit.LITURGICAL_GOLD, 340)
 
 	var center := size / 2.0
 	if _prompt.is_empty():

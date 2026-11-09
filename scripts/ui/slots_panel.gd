@@ -105,11 +105,12 @@ func _slot_text(slot: int, data: Dictionary, empty: bool, damaged: bool, dead: b
 		return "%s This save file is damaged and cannot be read." % number
 	var character := PlayerCharacter.from_dict(data["character"])
 	var temperament: String = GameData.temperament_def(character.temperament)["name"]
-	var day := int(data.get("day", 1))
+	Survival.ensure(data)
+	var date := Survival.date_text(Survival.now(data))
 	if dead:
-		return "%s † %s\nDied on day %d. %s" % [number, character.full_name, day, str(data.get("death_cause", ""))]
+		return "%s † %s\nDied %s. %s" % [number, character.full_name, date, str(data.get("death_cause", ""))]
 	var when := Time.get_date_string_from_unix_time(int(data.get("updated", 0.0)))
-	return "%s %s\n%s, day %d, last played %s" % [number, character.full_name, temperament, day, when]
+	return "%s %s\n%s, %s, last played %s" % [number, character.full_name, temperament, date, when]
 
 
 func _choose(slot: int, empty: bool, damaged: bool, dead: bool) -> void:

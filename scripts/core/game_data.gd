@@ -25,6 +25,47 @@ const HEALTH_PER_ENDURANCE := 4
 const MONEY_BASE := 40
 const MONEY_PER_BUSINESS := 3
 
+## Calendar. Day 1 is Saturday 15 January 2050.
+const WEEKDAYS := ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const MONTHS := ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+## Six four-hour shifts, starting at 06:00.
+const SHIFTS := ["Morning", "Noon", "Afternoon", "Evening", "Night", "Dead shift"]
+## Customers in a full shift at the stand, before skills.
+const SHIFT_CUSTOMERS := [6, 12, 8, 12, 5, 2]
+const HOT_DOG_PRICE := 4
+const CAN_PRICE := 2
+
+## What a shift can be spent on. Rates are per game hour, like the awake rates.
+const ACTIVITIES := [
+	{
+		"id": "work", "name": "Work the stand",
+		"desc": "Serve through the hatch, using your stock.",
+		"rates": {"hunger": 3.0, "thirst": 4.5, "tiredness": 4.0, "stress": 2.5},
+	},
+	{
+		"id": "rest", "name": "Rest at home",
+		"desc": "Sit down, read, let the day go by.",
+		"rates": {"hunger": 2.0, "thirst": 3.0, "tiredness": -3.0, "stress": -3.0},
+	},
+	{
+		"id": "sleep", "name": "Sleep",
+		"desc": "Sleep through the shift.",
+		"rates": {"hunger": 1.5, "thirst": 2.0, "tiredness": -12.0, "stress": -3.0},
+	},
+	{
+		"id": "rosary", "name": "Pray the rosary",
+		"desc": "At the home altar.",
+		"rates": {"hunger": 2.0, "thirst": 3.0, "tiredness": 1.0, "stress": -4.5},
+		"lean": -2,
+	},
+	{
+		"id": "mass", "name": "Go to Mass",
+		"desc": "At St. Brigid's, across the city.",
+		"rates": {"hunger": 2.0, "thirst": 3.0, "tiredness": 1.5, "stress": -6.0},
+		"lean": -3,
+	},
+]
+
 ## Shop. Units are what one order adds to your stock.
 const PRODUCTS := [
 	{"id": "sausages", "name": "Sausages", "pack": "Pack of 10", "units": 10, "price": 12, "desc": "For the grill."},
@@ -250,6 +291,10 @@ static func sin_def(id: String) -> Dictionary:
 
 static func appearance_def(id: String) -> Dictionary:
 	return _find(APPEARANCE, id)
+
+
+static func activity_def(id: String) -> Dictionary:
+	return _find(ACTIVITIES, id)
 
 
 static func product_def(id: String) -> Dictionary:

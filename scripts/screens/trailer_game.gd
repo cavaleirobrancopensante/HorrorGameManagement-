@@ -22,6 +22,8 @@ var _autosave := 0.0
 var _flicker_wait := 50.0
 var _arrived := 0
 var _day := 0
+var _shift := -1
+var _character: PlayerCharacter
 var _rng := RandomNumberGenerator.new()
 
 
@@ -31,13 +33,14 @@ func _ready() -> void:
 		return
 	save = Saves.current
 	Survival.ensure(save)
+	_character = Saves.current_character()
 	_rng.randomize()
 	_touch_mode = DisplayServer.is_touchscreen_available()
 	Sound.play_music("hum")
 	_build()
 	_restore()
 	if not _touch_mode:
-		hud.show_hint("Click to look around. WASD to move, E to use, F for the torch, Esc to pause.")
+		hud.show_hint("Click to look around. WASD to move, E to use, F for the torch, C to plan the day, Esc to pause.")
 
 
 func _build() -> void:
@@ -70,6 +73,7 @@ func _build() -> void:
 	touch.use_pressed.connect(_interact)
 	touch.light_pressed.connect(_toggle_light)
 	touch.pause_pressed.connect(go_back)
+	touch.plan_pressed.connect(_open_planner)
 	_set_busy(false)
 
 
@@ -120,6 +124,9 @@ func _process(delta: float) -> void:
 			return
 		_check_arrivals()
 		_update_day()
+		_update_shift()
+		for notice: String in Survival.take_notices(save):
+			hud.toast(notice)
 		_autosave += delta
 		if _autosave >= AUTOSAVE_SECONDS:
 			_autosave = 0.0
@@ -144,6 +151,14 @@ func _update_day() -> void:
 	world.set_candle_lit(int(save["world"]["candle_day"]) == day)
 
 
+func _update_shift() -> void:
+	var shift := Survival.shift_index(Survival.now(save))
+	if shift != _shift:
+		if _shift != -1:
+			hud.toast("The %s begins." % GameData.SHIFTS[shift].to_lower() if shift == 5 else "The %s shift begins." % GameData.SHIFTS[shift].to_lower())
+		_shift = shift
+
+
 func _check_arrivals() -> void:
 	var count := Survival.arrived(save).size()
 	if count > _arrived:
@@ -164,6 +179,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("flashlight"):
 		_toggle_light()
+		return
+	if event.is_action_pressed("plan_day"):
+		_open_planner()
 		return
 	if _touch_mode:
 		return
@@ -271,6 +289,8 @@ func _prompt_for(target: Interactable) -> String:
 			return "Close the hatch" if bool(save["world"]["hatch_open"]) else "Open the hatch"
 		"delivery":
 			return "Carry the delivery inside"
+		"calendar":
+			return "Plan the day"
 	return ""
 
 
@@ -324,6 +344,8 @@ func _interact() -> void:
 			_pray()
 		"delivery":
 			_collect()
+		"calendar":
+			_open_planner()
 
 
 func _eat() -> void:
@@ -402,6 +424,52 @@ func _sleep() -> void:
 	tween.tween_interval(0.6)
 	tween.tween_property(hud.fade, "color:a", 0.0, 1.0)
 	await tween.finished
+	_set_busy(false)
+
+
+# Shifts -----------------------------------------------------------------------
+
+func _open_planner() -> void:
+	if _busy or _dead or _paused:
+		return
+	Sound.click()
+	_set_busy(true)
+	DayPlanner.open(self)
+
+
+func on_planner_closed() -> void:
+	_set_busy(false)
+
+
+## Spends the rest of the shift on an activity: fade out, move the clock on,
+## fade back in and say what happened.
+func spend_shift(id: String) -> void:
+	var planner := get_tree().get_nodes_in_group("modal").filter(func(n: Node) -> bool: return n is DayPlanner)
+	for node: Node in planner:
+		node.remove_from_group("modal")
+		node.queue_free()
+	hud.fade.color = Color(0, 0, 0, 0)
+	var tween := create_tween()
+	tween.tween_property(hud.fade, "color:a", 1.0, 0.7)
+	await tween.finished
+	if id == "work":
+		save["world"]["hatch_open"] = true
+		world.set_hatch_open(true, false)
+	var result := Survival.spend_shift(save, id, _character, _rng)
+	if not str(result["cause"]).is_empty():
+		_die(result["cause"])
+		return
+	_check_arrivals()
+	_update_day()
+	_update_shift()
+	_save_now()
+	hud.toast(result["text"])
+	tween = create_tween()
+	tween.tween_interval(0.5)
+	tween.tween_property(hud.fade, "color:a", 0.0, 0.9)
+	await tween.finished
+	for notice: String in Survival.take_notices(save):
+		hud.toast(notice)
 	_set_busy(false)
 
 
