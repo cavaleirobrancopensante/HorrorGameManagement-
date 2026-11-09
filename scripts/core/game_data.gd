@@ -25,6 +25,55 @@ const HEALTH_PER_ENDURANCE := 4
 const MONEY_BASE := 40
 const MONEY_PER_BUSINESS := 3
 
+## Shop. Units are what one order adds to your stock.
+const PRODUCTS := [
+	{"id": "sausages", "name": "Sausages", "pack": "Pack of 10", "units": 10, "price": 12, "desc": "For the grill."},
+	{"id": "buns", "name": "Bread rolls", "pack": "Pack of 10", "units": 10, "price": 6, "desc": "For the grill."},
+	{"id": "soda", "name": "Fizzy drinks", "pack": "Case of 12 cans", "units": 12, "price": 10, "desc": "To sell, or to drink."},
+	{"id": "meals", "name": "Ready meals", "pack": "Pack of 3", "units": 3, "price": 9, "desc": "Your own food. Kept in the fridge."},
+	{"id": "coffee", "name": "Coffee", "pack": "Bag for 10 cups", "units": 10, "price": 5, "desc": "Keeps you awake."},
+	{"id": "candles", "name": "Candles", "pack": "Pack of 3", "units": 3, "price": 4, "desc": "For prayer at home."},
+]
+const STARTING_STOCK := {"sausages": 10, "buns": 10, "soda": 6, "meals": 2, "coffee": 3, "candles": 1}
+const DELIVERY_MINUTES := 45
+
+## State news on the computer. Which pool feeds the day's headlines depends on
+## where the horror leans.
+const NEWS_COMMON := [
+	"Consolidated Logistics: drones now reach every registered address.",
+	"Kitchen robots cut fast food wages for a third year.",
+	"Ministry of Harmony: citizens with nothing to hide have nothing to fear.",
+	"Civic Scores will now update every hour.",
+	"Night curfew extended across the eastern districts.",
+	"Street food licence fees rise again.",
+	"AI clerks replace the last staffed town hall.",
+	"Power cuts expected across the city tonight.",
+	"New cameras fitted to every second lamp post.",
+	"Food prices up nine percent since spring.",
+	"Unemployment reaches another record.",
+	"Score bonus for citizens who report suspicious neighbours.",
+]
+const NEWS_PERSECUTION := [
+	"Unregistered religious gatherings to be fined from Monday.",
+	"Ministry asks citizens to report 'extremist' prayer groups.",
+	"St. Brigid's parish placed under review by the Harmony Office.",
+	"Priest questioned over a Sunday homily on marriage.",
+	"Inspectors to visit vendors who refuse the Civic app.",
+	"Parishes that reject the new guidelines lose tax relief.",
+	"Religious symbols in shop windows to be reviewed.",
+	"Score penalty for regular church attendance announced.",
+]
+const NEWS_DEMONIC := [
+	"Third street vendor missing this month. Police see no link.",
+	"Residents report tall figures standing under streetlamps at night.",
+	"Animals found dead in a circle near the old rail yard.",
+	"Pharmacies report record sales of sleeping pills.",
+	"Night shift workers describe the same dream.",
+	"Man says something looked in his second floor window.",
+	"Whispering heard on police radios for a second night.",
+	"Missing vendor's trailer found with its lights still on.",
+]
+
 ## Where the horror leans, from -100 to 100. Sin pushes it up toward the
 ## demonic: easier survival, a compromised soul. Faithfulness pushes it down
 ## toward the dystopian state: persecution and harder material survival.
@@ -201,6 +250,10 @@ static func sin_def(id: String) -> Dictionary:
 
 static func appearance_def(id: String) -> Dictionary:
 	return _find(APPEARANCE, id)
+
+
+static func product_def(id: String) -> Dictionary:
+	return _find(PRODUCTS, id)
 
 
 static func option_name(appearance_id: String, option_id: String) -> String:

@@ -5,7 +5,12 @@ extends Control
 
 const COLUMNS := 40
 const ROWS := 48
+## Head to feet, for mirrors and cameras.
+const FULL_ROWS := 160
 const CENTER := 20
+
+## Draws the whole body on a clear background instead of a framed portrait.
+var full_body := false
 
 var character: PlayerCharacter:
 	set(value):
@@ -23,8 +28,9 @@ func _r(x: int, y: int, w: int, h: int, color: Color) -> void:
 func _draw() -> void:
 	if character == null:
 		return
-	_cell = floorf(minf(size.x / COLUMNS, size.y / ROWS))
-	_origin = ((size - Vector2(COLUMNS, ROWS) * _cell) / 2.0).floor()
+	var rows := FULL_ROWS if full_body else ROWS
+	_cell = floorf(minf(size.x / COLUMNS, size.y / rows))
+	_origin = ((size - Vector2(COLUMNS, rows) * _cell) / 2.0).floor()
 	var look: Dictionary = character.appearance
 	var skin := Color(GameData.SKIN_TONES.get(look["skin"], "#c79a6e"))
 	var hair := Color(GameData.HAIR_COLOURS.get(look["hair_colour"], "#1c1719"))
@@ -32,9 +38,12 @@ func _draw() -> void:
 	var heavy: bool = look["build"] == "heavy"
 	var half_widths := _head_shape(woman, look["build"])
 
-	_draw_background()
+	if not full_body:
+		_draw_background()
 	if look["hair"] == "long":
 		_r(CENTER - 11, 11, 22, 29, hair.darkened(0.3))
+	if full_body:
+		_draw_lower_body(look, skin, woman)
 	_draw_body(look, skin, woman)
 	_draw_head(half_widths, skin)
 	_draw_face(look, skin, woman)
@@ -78,6 +87,32 @@ func _draw_body(look: Dictionary, skin: Color, woman: bool) -> void:
 	_r(CENTER + 4, 42, 5, 6, apron.darkened(0.25))
 	_r(CENTER - 8, 38, 3, 4, apron.darkened(0.1))
 	_r(CENTER + 5, 38, 3, 4, apron.darkened(0.25))
+
+
+func _draw_lower_body(look: Dictionary, skin: Color, woman: bool) -> void:
+	var half := {"lean": 13, "average": 15, "heavy": 18}.get(look["build"], 15) as int
+	if woman:
+		half -= 2
+	var waist := half - 2
+	var shirt := Color("#4b4a55")
+	var trousers := Color("#2b2833")
+	var shoes := Color("#141216")
+	var apron := Color(GameData.APRON_COLOURS.get(look["apron"], "#b9b3a4"))
+	_r(CENTER - waist + 1, 96, waist - 2, 54, trousers)
+	_r(CENTER + 1, 96, waist - 2, 54, trousers.darkened(0.25))
+	_r(CENTER - waist, 150, waist, 8, shoes)
+	_r(CENTER + 1, 150, waist, 8, shoes)
+	_r(CENTER - half, 40, half * 2, 30, shirt)
+	_r(CENTER - waist, 70, waist * 2, 28, shirt)
+	_r(CENTER + half - 5, 40, 5, 30, shirt.darkened(0.3))
+	_r(CENTER + waist - 5, 70, 5, 28, shirt.darkened(0.3))
+	_r(CENTER - half, 44, 4, 46, shirt.darkened(0.12))
+	_r(CENTER + half - 4, 44, 4, 46, shirt.darkened(0.4))
+	_r(CENTER - half, 90, 4, 7, skin)
+	_r(CENTER + half - 4, 90, 4, 7, skin.darkened(0.3))
+	_r(CENTER - 9, 42, 18, 70, apron)
+	_r(CENTER + 4, 42, 5, 70, apron.darkened(0.25))
+	_r(CENTER - waist, 76, waist * 2, 1, apron.darkened(0.35))
 
 
 func _draw_head(half_widths: Array, skin: Color) -> void:

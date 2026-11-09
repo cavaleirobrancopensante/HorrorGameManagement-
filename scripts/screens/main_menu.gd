@@ -6,6 +6,7 @@ var _first_button: Button
 
 
 func _ready() -> void:
+	Sound.play_music("menu")
 	add_child(MenuBackdrop.new())
 	_add_reading_shade()
 	var margin := MarginContainer.new()
@@ -40,7 +41,7 @@ func _ready() -> void:
 	load_button.disabled = not Saves.any_saves()
 	_menu_button(column, "Settings", _on_settings)
 	# iOS does not let apps close themselves.
-	if not OS.has_feature("ios"):
+	if not OS.has_feature("ios") and not OS.has_feature("web"):
 		_menu_button(column, "Quit game", go_back)
 	if not DisplayServer.is_touchscreen_available():
 		_first_button.grab_focus()

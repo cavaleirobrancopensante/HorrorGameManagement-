@@ -17,6 +17,10 @@ func _initialize() -> void:
 	_test_ten_independent_slots()
 	_test_dead_is_dead()
 	_test_damaged_file()
+	_test_needs_and_time()
+	_test_shop_and_deliveries()
+	_test_sleep()
+	_test_news()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -116,7 +120,7 @@ func _test_ten_independent_slots() -> void:
 		saves.current["updated"] = 0.0
 	_check(saves.first_empty_slot() == -1, "ten slots full")
 	saves.load_slot(4)
-	saves.current["day"] = 9
+	saves.current["world"]["time"] = float(saves.current["world"]["time"]) + 8 * Survival.DAY
 	saves.save_current()
 	_check(saves.most_recent_living_slot() == 4, "continue picks last played")
 	saves.load_slot(5)
@@ -142,6 +146,81 @@ func _test_dead_is_dead() -> void:
 	_check(saves.read_slot(0)["alive"] == false, "death is on disk")
 	_check(saves.any_saves(), "memorial still listed")
 	_check(saves.first_empty_slot() == 1, "memorial occupies slot")
+
+
+func _new_save() -> Dictionary:
+	var character := PlayerCharacter.new()
+	character.randomize_all(_rng(9))
+	var save := {"character": character.to_dict(), "day": 1}
+	Survival.ensure(save)
+	return save
+
+
+func _test_needs_and_time() -> void:
+	var save := _new_save()
+	_check(Survival.clock_text(Survival.now(save)) == "20:00", "day starts at 20:00")
+	_check(Survival.stock(save, "meals") == 2, "starting stock")
+	var hunger := Survival.need(save, "hunger")
+	_check(Survival.advance(save, 60.0) == "", "an hour passes alive")
+	_check(is_equal_approx(Survival.need(save, "hunger"), hunger + 3.0), "hunger rises per hour")
+	_check(Survival.clock_text(Survival.now(save)) == "21:00", "clock moves")
+	Survival.advance(save, 3.0 * 60.0)
+	_check(int(save["day"]) == 2, "day rolls over at midnight")
+	_check(is_equal_approx(Survival.daylight(12 * 60.0), 1.0) and Survival.daylight(23 * 60.0) == 0.0, "daylight")
+	save["survival"]["thirst"] = 100.0
+	var cause := ""
+	for i in 30:
+		cause = Survival.advance(save, 60.0)
+		if not cause.is_empty():
+			break
+	_check(cause == "Died of thirst.", "thirst kills: %s" % cause)
+	_check(Survival.health(save) == 0.0, "health at zero")
+
+
+func _test_shop_and_deliveries() -> void:
+	var save := _new_save()
+	save["survival"]["money"] = 20
+	_check(Survival.order(save, "sausages") == "", "can buy")
+	_check(Survival.money(save) == 8, "money taken")
+	_check(Survival.order(save, "sausages") == "Not enough money.", "cannot overspend")
+	_check(Survival.order(save, "buns") == "", "second order")
+	_check((save["world"]["deliveries"] as Array).size() == 1, "orders share a drone")
+	_check(Survival.arrived(save).is_empty(), "not yet arrived")
+	Survival.advance(save, float(GameData.DELIVERY_MINUTES))
+	_check(Survival.arrived(save).size() == 1, "delivery arrives")
+	var before := Survival.stock(save, "sausages")
+	var got := Survival.collect(save)
+	_check(int(got["sausages"]) == 10 and int(got["buns"]) == 10, "collected items")
+	_check(Survival.stock(save, "sausages") == before + 10, "stock grows")
+	_check((save["world"]["deliveries"] as Array).is_empty(), "delivery cleared")
+	_check(Survival.take_stock(save, "candles") and not Survival.take_stock(save, "candles"), "take stock")
+	# JSON turns numbers into floats; the rules must still work after a reload.
+	var reloaded: Dictionary = JSON.parse_string(JSON.stringify(save))
+	reloaded["survival"]["money"] = 50.0
+	_check(Survival.stock(reloaded, "sausages") == before + 10, "stock after reload")
+	_check(Survival.order(reloaded, "coffee") == "", "order after reload")
+
+
+func _test_sleep() -> void:
+	var save := _new_save()
+	save["survival"]["tiredness"] = 80.0
+	Survival.advance(save, 2.0 * 60.0)  # 22:00
+	_check(is_equal_approx(Survival.sleep_minutes(save), 9.0 * 60.0), "sleep until 07:00")
+	_check(Survival.sleep(save) == "", "sleep is safe")
+	_check(Survival.clock_text(Survival.now(save)) == "07:00", "wake at 07:00")
+	_check(Survival.need(save, "tiredness") < 5.0, "rested")
+	_check(int(save["day"]) == 2, "next day after sleep")
+	Survival.advance(save, 6.0 * 60.0)  # 13:00
+	_check(is_equal_approx(Survival.sleep_minutes(save), 480.0), "nap is 8 hours")
+
+
+func _test_news() -> void:
+	_check(Survival.headlines(3, 0).size() == 5, "five headlines")
+	_check(Survival.headlines(3, 0) == Survival.headlines(3, 0), "same day same news")
+	var faithful := Survival.headlines(4, -50)
+	_check(GameData.NEWS_PERSECUTION.has(faithful[0]), "faithful see persecution")
+	var sinful := Survival.headlines(4, 50)
+	_check(GameData.NEWS_DEMONIC.has(sinful[0]), "sinful see the strange")
 
 
 func _test_damaged_file() -> void:

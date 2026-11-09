@@ -65,13 +65,6 @@ func most_recent_living_slot() -> int:
 
 func start_new(character: PlayerCharacter, slot: int) -> bool:
 	var now := Time.get_unix_time_from_system()
-	var survival := {
-		"money": character.starting_money(),
-		"health": character.max_health(),
-		"max_health": character.max_health(),
-	}
-	for need: Dictionary in GameData.NEEDS:
-		survival[need["id"]] = need["start"]
 	current_slot = slot
 	current = {
 		"version": FORMAT_VERSION,
@@ -82,10 +75,9 @@ func start_new(character: PlayerCharacter, slot: int) -> bool:
 		"day": 1,
 		"location": "trailer",
 		"character": character.to_dict(),
-		"survival": survival,
-		"soul": {"state_of_grace": true, "horror_lean": 0},
-		"world": {},
 	}
+	# Money, health, needs, soul, clock and stock all start from the rules.
+	Survival.ensure(current)
 	return save_current()
 
 
@@ -95,7 +87,7 @@ func load_slot(slot: int) -> bool:
 		return false
 	current_slot = slot
 	current = data
-	current["day"] = int(current.get("day", 1))
+	Survival.ensure(current)
 	return true
 
 

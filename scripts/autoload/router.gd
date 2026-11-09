@@ -4,12 +4,30 @@ extends Node
 const SCENES := {
 	"main_menu": "res://scenes/main_menu.tscn",
 	"character_creation": "res://scenes/character_creation.tscn",
-	"game": "res://scenes/game_placeholder.tscn",
+	"game": "res://scenes/trailer.tscn",
+}
+
+
+const KEYS := {
+	"move_forward": [KEY_W, KEY_UP],
+	"move_back": [KEY_S, KEY_DOWN],
+	"move_left": [KEY_A, KEY_LEFT],
+	"move_right": [KEY_D, KEY_RIGHT],
+	"interact": [KEY_E],
+	"flashlight": [KEY_F],
 }
 
 
 func _ready() -> void:
 	get_window().theme = UiKit.build_theme()
+	for action: String in KEYS:
+		if InputMap.has_action(action):
+			continue
+		InputMap.add_action(action)
+		for key: Key in KEYS[action]:
+			var event := InputEventKey.new()
+			event.physical_keycode = key
+			InputMap.action_add_event(action, event)
 
 
 func goto(screen: String) -> void:
