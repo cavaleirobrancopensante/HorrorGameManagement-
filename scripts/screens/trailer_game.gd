@@ -24,6 +24,9 @@ var _autosave := 0.0
 var _flicker_wait := 50.0
 var _arrived := 0
 var _day := 0
+## Seconds of quiet before the next piece of music.
+var _music_wait := 8.0
+var _last_piece := ""
 var _shift := -1
 var _rng := RandomNumberGenerator.new()
 
@@ -37,7 +40,9 @@ func _ready() -> void:
 	character = Saves.current_character()
 	_rng.randomize()
 	_touch_mode = DisplayServer.is_touchscreen_available()
-	Sound.play_music("hum")
+	Sound.play_ambience("hum")
+	Sound.stop_music()
+	Sound.music_finished.connect(_on_music_finished)
 	_build()
 	_restore()
 	if not _touch_mode:
@@ -139,6 +144,7 @@ func _process(delta: float) -> void:
 		if _autosave >= AUTOSAVE_SECONDS:
 			_autosave = 0.0
 			_save_now()
+		_update_music(delta)
 		_flicker_wait -= delta
 		if _flicker_wait <= 0.0:
 			_flicker_wait = _rng.randf_range(45.0, 120.0)
@@ -170,6 +176,40 @@ func _update_shift() -> void:
 		if _shift != -1:
 			hud.toast("The %s begins." % GameData.SHIFTS[shift].to_lower() if shift == 5 else "The %s shift begins." % GameData.SHIFTS[shift].to_lower())
 		_shift = shift
+
+
+## Music comes in pieces, with silence between them: the hum of the trailer is
+## part of the score. The piece follows the hour, Sunday, and the soul.
+func _update_music(delta: float) -> void:
+	if Sound.is_music_playing():
+		return
+	_music_wait -= delta
+	if _music_wait > 0.0:
+		return
+	_music_wait = 9999.0
+	var piece := choose_piece()
+	_last_piece = piece
+	Sound.play_music(piece)
+
+
+func choose_piece() -> String:
+	var now := Survival.now(save)
+	var light := Survival.daylight(now)
+	if Survival.weekday(now) == 0 and light > 0.3:
+		return "sunday"
+	if light >= 0.5:
+		return "overcast"
+	# At night, dread grows with sin and with stress.
+	var lean := float(save["soul"].get("horror_lean", 0))
+	var dread := clampf(0.25 + lean / 200.0 + Survival.need(save, "stress") / 400.0, 0.1, 0.8)
+	if _last_piece == "outside":
+		dread *= 0.5
+	return "outside" if _rng.randf() < dread else "night_shift"
+
+
+func _on_music_finished() -> void:
+	if not _dead:
+		_music_wait = _rng.randf_range(30.0, 75.0)
 
 
 func _check_arrivals() -> void:
@@ -518,6 +558,8 @@ func _die(cause: String) -> void:
 	_dead = true
 	_set_busy(true)
 	Saves.kill_current(cause)
+	Sound.stop_ambience()
+	Sound.play_music("requiem")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	hud.fade.color = Color(0.22, 0.0, 0.02, 0.0)
 	var tween := create_tween()

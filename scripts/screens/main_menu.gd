@@ -6,7 +6,8 @@ var _first_button: Button
 
 
 func _ready() -> void:
-	Sound.play_music("menu")
+	Sound.stop_ambience()
+	Sound.play_music("menu", true)
 	add_child(MenuBackdrop.new())
 	_add_reading_shade()
 	var margin := MarginContainer.new()
