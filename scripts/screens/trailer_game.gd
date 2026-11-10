@@ -66,6 +66,8 @@ func _build() -> void:
 	player = Player.new()
 	viewport.add_child(player)
 	player.camera.make_current()
+	var look: Dictionary = character.appearance
+	player.arm.dress(Color(GameData.SKIN_TONES.get(look["skin"], "#c79a6e")), Color("#4b4a55"))
 	world.mirror.viewer = player.camera
 	player.body_sprite.texture = _make_body_texture()
 	player.stepped.connect(func() -> void: Sound.play("step", 0.12, -8.0))
@@ -152,6 +154,7 @@ func _process(delta: float) -> void:
 	var target := player.focused
 	hud.set_prompt("" if _busy or target == null else _prompt_for(target))
 	hud.set_holding("" if _busy else stand.held_text(), stand.can_eat_held())
+	player.arm.holding = stand.held != null
 	hud.bubbles = [] if _busy else stand.bubbles(player.camera, float(PIXEL_SCALE))
 	if touch.hand_ready != stand.can_eat_held():
 		touch.hand_ready = stand.can_eat_held()
@@ -309,7 +312,10 @@ func _notification(what: int) -> void:
 func _use_hand() -> void:
 	if _busy or _dead or _paused:
 		return
-	stand.use_held()
+	if stand.can_eat_held():
+		player.arm.to_mouth(stand.use_held)
+	else:
+		stand.use_held()
 
 
 func _toggle_light() -> void:
@@ -334,6 +340,8 @@ func _prompt_for(target: Interactable) -> String:
 			return "Use the computer"
 		"sink":
 			return "Drink tap water"
+		"shower":
+			return "Take a shower"
 		"bed":
 			return "Sleep"
 		"altar":
@@ -363,6 +371,9 @@ func _interact() -> void:
 	var target := player.focused
 	if target == null:
 		return
+	if _prompt_for(target).is_empty():
+		return
+	player.arm.reach()
 	if stand.use(target):
 		return
 	match target.id:
@@ -378,6 +389,8 @@ func _interact() -> void:
 			hud.toast("You drink from the tap. The water tastes of rust.")
 		"fridge":
 			_eat()
+		"shower":
+			_shower()
 		"coffee":
 			if Survival.take_stock(save, "coffee"):
 				Survival.change_need(save, "tiredness", -20.0)
@@ -401,6 +414,18 @@ func _interact() -> void:
 			_collect()
 		"calendar":
 			_open_planner()
+
+
+## A quarter of an hour under the water: it eases stress and wakes you a little.
+func _shower() -> void:
+	Sound.play("water", 0.0, -2.0)
+	Survival.change_need(save, "stress", -15.0)
+	Survival.change_need(save, "tiredness", -5.0)
+	var cause := Survival.advance(save, 15.0)
+	if not cause.is_empty():
+		_die(cause)
+		return
+	hud.toast("You take a shower. The water runs brown, then clear.")
 
 
 func _eat() -> void:
