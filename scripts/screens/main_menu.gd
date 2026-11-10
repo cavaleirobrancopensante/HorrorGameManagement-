@@ -44,8 +44,32 @@ func _ready() -> void:
 	# iOS does not let apps close themselves.
 	if not OS.has_feature("ios") and not OS.has_feature("web"):
 		_menu_button(column, "Quit game", go_back)
+	_add_version_button(margin)
 	if not DisplayServer.is_touchscreen_available():
 		_first_button.grab_focus()
+
+
+## The version, bottom right. Pressing it shows the patch notes.
+func _add_version_button(margin: MarginContainer) -> void:
+	var corner := Control.new()
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(corner)
+	var node := UiKit.button("Version %s  ·  Patch notes" % Changelog.version(), PatchNotesPanel.open.bind(self))
+	node.add_theme_font_size_override("font_size", UiKit.SIZE_SMALL)
+	node.add_theme_color_override("font_color", UiKit.ASH)
+	node.add_theme_color_override("font_hover_color", UiKit.SODIUM)
+	var quiet := StyleBoxEmpty.new()
+	quiet.content_margin_left = 8
+	quiet.content_margin_right = 8
+	quiet.content_margin_top = 6
+	quiet.content_margin_bottom = 6
+	for state in ["normal", "hover", "pressed"]:
+		node.add_theme_stylebox_override(state, quiet)
+	node.focus_mode = Control.FOCUS_NONE
+	corner.add_child(node)
+	node.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE)
+	node.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	node.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 
 func _add_reading_shade() -> void:

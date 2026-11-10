@@ -14,6 +14,15 @@ var full_body := false
 ## Customers wear their own clothes instead of the cook's apron.
 var apron := true
 var shirt_colour := Color("#4b4a55")
+## A priest's white collar.
+var collar := false
+## What your right arm is doing in the full-body figure: "rest", "hold",
+## "reach" or "eat". It matches the arm you see in first person.
+var pose := "rest"
+## The kind of food or thing in that hand, or "" for an empty hand.
+var held := ""
+## Ketchup and mustard on held food.
+var held_sauces: Array = []
 
 var character: PlayerCharacter:
 	set(value):
@@ -54,6 +63,8 @@ func _draw() -> void:
 	_draw_mark(look["mark"], skin)
 	_draw_hair(look["hair"], hair, half_widths)
 	_draw_age(look["age"], skin, look["hair"] == "bald")
+	if full_body:
+		_draw_right_arm(look, skin, woman)
 
 
 func _head_shape(woman: bool, build: String) -> Array:
@@ -86,6 +97,9 @@ func _draw_body(look: Dictionary, skin: Color, woman: bool) -> void:
 	_r(CENTER - half + 2, 38, half * 2 - 4, 2, shirt)
 	_r(CENTER - half, 40, half * 2, 8, shirt)
 	_r(CENTER + half - 5, 40, 5, 8, shirt.darkened(0.3))
+	if collar:
+		_r(CENTER - 4, 37, 8, 2, shirt)
+		_r(CENTER - 1, 37, 2, 2, Color("#efeae0"))
 	if apron:
 		_r(CENTER - 9, 42, 18, 6, apron_colour)
 		_r(CENTER + 4, 42, 5, 6, apron_colour.darkened(0.25))
@@ -110,9 +124,10 @@ func _draw_lower_body(look: Dictionary, skin: Color, woman: bool) -> void:
 	_r(CENTER - waist, 70, waist * 2, 28, shirt)
 	_r(CENTER + half - 5, 40, 5, 30, shirt.darkened(0.3))
 	_r(CENTER + waist - 5, 70, 5, 28, shirt.darkened(0.3))
-	_r(CENTER - half, 44, 4, 46, shirt.darkened(0.12))
+	if pose == "rest":
+		_r(CENTER - half, 44, 4, 46, shirt.darkened(0.12))
+		_r(CENTER - half, 90, 4, 7, skin)
 	_r(CENTER + half - 4, 44, 4, 46, shirt.darkened(0.4))
-	_r(CENTER - half, 90, 4, 7, skin)
 	_r(CENTER + half - 4, 90, 4, 7, skin.darkened(0.3))
 	if apron:
 		_r(CENTER - 9, 42, 18, 70, apron_colour)
@@ -237,3 +252,89 @@ func _draw_age(age: String, skin: Color, bald: bool) -> void:
 		_r(CENTER - 5, 17, 10, 1, line)
 	_r(CENTER - 5, 24, 3, 1, line)
 	_r(CENTER + 2, 24, 3, 1, line)
+
+
+# Right arm and what it holds ---------------------------------------------------
+# Drawn on the left of the image, which is the figure's own right hand. Mirrors
+# flip it, so it lines up with the arm you see in first person.
+
+func _draw_right_arm(look: Dictionary, skin: Color, woman: bool) -> void:
+	if pose == "rest":
+		return
+	var half := {"lean": 13, "average": 15, "heavy": 18}.get(look["build"], 15) as int
+	if woman:
+		half -= 2
+	var sleeve := shirt_colour.darkened(0.12)
+	var x := CENTER - half
+	match pose:
+		"hold":
+			# Upper arm down the side, forearm raised across the chest.
+			_r(x, 44, 4, 14, sleeve)
+			for i in 4:
+				_r(x + 1 + i * 2, 57 - i * 2, 4, 5, sleeve.darkened(0.08))
+			_r(x + 9, 48, 5, 5, skin)
+			_r(x + 9, 52, 5, 1, skin.darkened(0.3))
+			_draw_held(x + 11, 47)
+		"reach":
+			# Arm out toward the viewer: short, and the hand looks bigger.
+			_r(x, 44, 4, 8, sleeve)
+			_r(x + 1, 50, 6, 5, sleeve.darkened(0.06))
+			_r(x + 2, 53, 8, 8, skin.lightened(0.06))
+			_r(x + 2, 60, 8, 1, skin.darkened(0.3))
+			_draw_held(x + 6, 51)
+		"eat":
+			# Elbow by the ribs, forearm up to the mouth.
+			_r(x, 44, 4, 16, sleeve)
+			var steps := 7
+			for i in steps:
+				var t := float(i) / float(steps - 1)
+				var px := roundi(lerpf(x + 2, CENTER - 7, t))
+				var py := roundi(lerpf(58, 35, t))
+				_r(px, py, 4, 5, sleeve.darkened(0.06))
+			_r(CENTER - 7, 31, 5, 5, skin)
+			_draw_held(CENTER - 3, 30)
+
+
+## The held thing, centred on (x, y) in figure cells.
+func _draw_held(x: int, y: int) -> void:
+	var bread := Color("#c8964f")
+	var meat := Color("#7a3a24")
+	match held:
+		"":
+			return
+		"sausage":
+			_r(x - 4, y - 1, 9, 2, Color("#b8705a"))
+		"patty":
+			_r(x - 3, y - 1, 7, 2, meat)
+		"bun":
+			_r(x - 4, y - 1, 9, 3, bread)
+			_r(x - 4, y - 1, 9, 1, bread.lightened(0.15))
+		"hot_dog":
+			_r(x - 5, y - 1, 11, 3, bread)
+			_r(x - 5, y - 2, 11, 1, meat)
+			_draw_sauces(x - 4, y - 2, 9)
+		"burger":
+			_r(x - 3, y - 3, 7, 2, bread.lightened(0.1))
+			_r(x - 3, y - 1, 7, 1, meat)
+			_r(x - 3, y, 7, 2, bread)
+			_draw_sauces(x - 2, y - 1, 5)
+		"ketchup":
+			_r(x - 1, y - 5, 3, 6, Color("#b8262b"))
+			_r(x, y - 7, 1, 2, Color("#e0d8c8"))
+		"mustard":
+			_r(x - 1, y - 5, 3, 6, Color("#d6a72a"))
+			_r(x, y - 7, 1, 2, Color("#e0d8c8"))
+		"can":
+			_r(x - 1, y - 4, 3, 5, Color("#a3302c"))
+			_r(x - 1, y - 4, 3, 1, Color("#b7b7bd"))
+		_:
+			_r(x - 2, y - 2, 4, 4, Color("#8a8590"))
+
+
+func _draw_sauces(x: int, y: int, width: int) -> void:
+	var row := 0
+	for sauce: String in held_sauces:
+		var colour := Color("#b8262b") if sauce == "ketchup" else Color("#d6a72a")
+		for i in range(row, width, 3):
+			_r(x + i, y, 1, 1, colour)
+		row += 1

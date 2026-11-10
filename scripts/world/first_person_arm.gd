@@ -23,6 +23,9 @@ var holding := false:
 			_settle()
 
 var _busy := false
+## What the arm is doing right now: "", "reach" or "eat". The body sprite in
+## mirrors and on the cameras copies it.
+var action := ""
 var _sway := Vector3.ZERO
 var _tween: Tween
 var _materials: Array[StandardMaterial3D] = []
@@ -79,11 +82,13 @@ func _part(size: Vector3, at: Vector3, material: StandardMaterial3D) -> MeshInst
 
 ## The hand goes out to whatever you are using, then back.
 func reach() -> void:
+	action = "reach"
 	_play([[REACH_POSE, REACH_TURN, 0.13], [_rest_pose(), REST_TURN, 0.2]], Callable())
 
 
-## The hand brings what it holds to your mouth. then runs at the top.
+## The hand brings what it holds to your mouth. `then` runs at the top.
 func to_mouth(then: Callable) -> void:
+	action = "eat"
 	_play([[MOUTH_POSE, MOUTH_TURN, 0.22], [MOUTH_POSE, MOUTH_TURN, 0.12]], then, [REST, REST_TURN, 0.25])
 
 
@@ -109,6 +114,7 @@ func _play(steps: Array, then: Callable, after: Array = []) -> void:
 		_tween.parallel().tween_property(self, "rotation_degrees", after[1], after[2])
 	_tween.tween_callback(func() -> void:
 		_busy = false
+		action = ""
 		_settle()
 	)
 
@@ -126,3 +132,10 @@ func sway(bob: float, amount: float) -> void:
 	_sway = Vector3(sin(bob * 0.5) * 0.012, -absf(sin(bob)) * 0.014, 0.0) * amount
 	if holding and not _busy:
 		position = REST + _sway
+
+
+## The pose for the body sprite: "reach", "eat", "hold" or "rest".
+func pose() -> String:
+	if not action.is_empty():
+		return action
+	return "hold" if holding else "rest"

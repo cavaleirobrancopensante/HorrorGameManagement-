@@ -26,6 +26,17 @@ Play a shift freely, or spend it on work, rest, sleep, prayer or Mass from the
 day planner (wall calendar, C, or the Day button). Missing Sunday Mass costs the
 state of grace; the Saturday evening vigil counts.
 
+## The soul
+
+- **Temptations** come during the day, one per shift at most, more often when you are stressed. Giving in helps you and eases stress, but goes on your record and pushes the horror toward the demonic. Resisting costs stress, more for the sins you struggle with.
+- **St. Brigid's**: walk there from the sign at the end of the church street (open morning to evening). Hear Mass from the pews, then receive Communion or stay in the pew. Pray at the rail, light a candle, talk to Father Columba.
+- **Confession** every evening and on Saturday afternoon. A full confession restores the state of grace; holding back a grave sin makes it a bad confession.
+- Faithfulness draws the state: a watcher in the church, fines on the way home.
+
+## Patch notes
+
+The version is on the main menu; press it for every patch's changes. They live in `scripts/core/changelog.gd`, and its first entry must match `config/version` in `project.godot`.
+
 ## Tests
 
 `godot --headless --path . -s tests/run_tests.gd`
