@@ -46,6 +46,7 @@ var _lamp_meshes: Array[Node3D] = []
 var _bathroom_light: OmniLight3D
 var _griddle: MeshInstance3D
 var _blacked_out := false
+var _window_shutter: Node3D
 var _upgrades := {}
 var _tv_screen: MeshInstance3D
 var _tv_light: OmniLight3D
@@ -297,6 +298,16 @@ func _build_environment() -> void:
 	var holder := WorldEnvironment.new()
 	holder.environment = _environment
 	add_child(holder)
+
+
+## Rolls the window shutter down or up.
+func set_shutters(closed: bool, animate: bool) -> void:
+	var target := 1.0 if closed else 0.02
+	if not animate:
+		_window_shutter.scale.y = target
+		return
+	var tween := create_tween()
+	tween.tween_property(_window_shutter, "scale:y", target, 0.9).set_trans(Tween.TRANS_SINE)
 
 
 ## Shows what you have bought: the street TV, the neon sign, the pro griddle.
@@ -594,6 +605,28 @@ func _build_home() -> void:
 	glass.position = Vector3(8.3, 1.375, WIDTH + 0.06)
 	add_child(glass)
 	_span(Vector3(7.72, 1.88, WIDTH - 0.06), Vector3(8.88, 1.9, WIDTH - 0.04), _c("#2b2b30"), false)
+	# Roller shutter inside the window: a box at the top it rolls down from.
+	_span(Vector3(7.86, 1.78, WIDTH - 0.13), Vector3(8.74, 1.88, WIDTH - 0.03), _c("#3a3c40"), false)
+	_window_shutter = Node3D.new()
+	_window_shutter.position = Vector3(8.3, 1.78, WIDTH - 0.08)
+	add_child(_window_shutter)
+	var slats := MeshInstance3D.new()
+	var slat_box := BoxMesh.new()
+	slat_box.size = Vector3(0.86, 0.8, 0.02)
+	slats.mesh = slat_box
+	slats.material_override = _c("#6a6d72")
+	slats.position.y = -0.4
+	_window_shutter.add_child(slats)
+	for i in 8:
+		var groove := MeshInstance3D.new()
+		var line := BoxMesh.new()
+		line.size = Vector3(0.86, 0.012, 0.024)
+		groove.mesh = line
+		groove.material_override = _c("#2b2c30")
+		groove.position.y = -0.05 - i * 0.1
+		_window_shutter.add_child(groove)
+	_window_shutter.scale.y = 0.02
+	_zone(Vector3(7.86, 0.98, WIDTH - 0.2), Vector3(8.74, 1.78, WIDTH - 0.1), "shutters")
 	_span(Vector3(7.72, 0.95, WIDTH - 0.08), Vector3(7.95, 1.88, WIDTH - 0.05), _m("fabric"), false)
 	_span(Vector3(8.65, 0.95, WIDTH - 0.08), Vector3(8.88, 1.88, WIDTH - 0.05), _m("fabric"), false)
 

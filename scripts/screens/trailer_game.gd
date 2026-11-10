@@ -153,6 +153,7 @@ func _restore() -> void:
 	_set_in_church(Church.contains(player.position))
 	world.set_hatch_open(bool(state["hatch_open"]), false)
 	world.apply_upgrades(state["upgrades"])
+	world.set_shutters(bool(state["shutters_closed"]), false)
 	_arrived = Survival.arrived(save).size()
 	world.show_crates(_arrived)
 	_update_day()
@@ -399,6 +400,8 @@ func _prompt_for(target: Interactable) -> String:
 			return "Carry the delivery inside"
 		"calendar":
 			return "Plan the day"
+		"shutters":
+			return "Open the shutters" if save["world"]["shutters_closed"] else "Close the shutters"
 		"church_street":
 			if not Soul.church_open(Survival.now(save)):
 				return "St. Brigid's is locked at night"
@@ -471,6 +474,12 @@ func _interact() -> void:
 			_collect()
 		"calendar":
 			_open_planner()
+		"shutters":
+			var closed := not bool(save["world"]["shutters_closed"])
+			save["world"]["shutters_closed"] = closed
+			world.set_shutters(closed, true)
+			Sound.play("door", 0.15, -10.0)
+			save["world"]["learned"]["shutters"] = true
 		"church_street":
 			if Soul.church_open(Survival.now(save)):
 				_walk(true)
@@ -589,19 +598,106 @@ func _sleep() -> void:
 	var tween := create_tween()
 	tween.tween_property(hud.fade, "color:a", 1.0, 0.8)
 	await tween.finished
-	var cause := Survival.sleep(save)
+	var total := Survival.sleep_minutes(save)
+	var night := Horror.night(save, _rng, bool(save["world"]["shutters_closed"]), total)
+	var woken: bool = not night.is_empty() and night["id"] != "pry_marks"
+	var cause := Survival.advance(save, float(night["after"]) if woken else total, Survival.SLEEP_RATES)
 	if not cause.is_empty():
 		_die(cause)
 		return
 	_update_day()
+	if woken:
+		if night["id"] == "burglar":
+			await _burglar()
+		else:
+			await _paralysis()
+		return
 	_save_now()
 	var woke := Survival.now(save)
 	hud.toast("Day %d, %s. You wake up." % [Survival.day_of(woke), Survival.clock_text(woke)])
+	if not night.is_empty():
+		hud.toast("In the morning there are pry marks on your window shutter. It held.")
 	tween = create_tween()
 	tween.tween_interval(0.6)
 	tween.tween_property(hud.fade, "color:a", 0.0, 1.0)
 	await tween.finished
 	_set_busy(false)
+
+
+## Glass breaks in the night: someone is coming in through the window.
+func _burglar() -> void:
+	if save["world"]["shutters_closed"]:
+		save["world"]["shutters_closed"] = false
+		world.set_shutters(false, false)
+	player.global_position = Vector3(8.3, 0.05, 1.7)
+	player.rotation.y = PI
+	player.set_pitch(deg_to_rad(6.0))
+	var thief: Node3D = world.church._person("#1a1b20", false)
+	thief.position = Vector3(8.3, -0.15, 3.4)
+	Sound.play("glass")
+	await get_tree().create_timer(0.4).timeout
+	var tween := create_tween()
+	tween.tween_property(hud.fade, "color:a", 0.0, 0.35)
+	await tween.finished
+	# A moment to see him before you decide.
+	hud.toast("Someone is coming in through the window.")
+	await get_tree().create_timer(1.8).timeout
+	var chance := Horror.fight_chance(character.stat_value("endurance"), character.stat_value("vigilance"))
+	var odds := "good odds" if chance >= 0.6 else ("even odds" if chance >= 0.4 else "poor odds")
+	ChoiceOverlay.ask(self, "Someone at the window", "Glass on the floor. A man in black is climbing in through your window, reaching for the cash tin. He has not seen that you are awake.", [
+		["Fight him (%s)" % odds, _burglar_fight.bind(thief)],
+		["Lie still and let him take it", _burglar_let.bind(thief)],
+	], Callable(), Color("#ff6a70"), 0.35)
+
+
+func _burglar_fight(thief: Node3D) -> void:
+	Sound.play("knock", 0.1, 4.0)
+	horror._shake(0.5, 0.1)
+	hud.flash(Color(0.5, 0.0, 0.0, 0.55))
+	var result := Horror.fight_burglar(save, character.stat_value("endurance"), character.stat_value("vigilance"), _rng)
+	thief.queue_free()
+	_after_night(result["text"], true)
+
+
+func _burglar_let(thief: Node3D) -> void:
+	var text := Horror.let_burglar(save, _rng)
+	thief.queue_free()
+	_after_night(text, true)
+
+
+func _after_night(text: String, window := false) -> void:
+	if window and not bool(save["world"]["learned"].get("shutters", false)):
+		text += "\n\nThe window has a roller shutter. Close it before you sleep."
+	_save_now()
+	NoticeOverlay.show_notice(self, "The night", text, func() -> void:
+		if Survival.health(save) <= 0.0:
+			_die("A burglar killed you in your own trailer.")
+			return
+		_set_busy(false)
+	)
+
+
+## You wake and cannot move. Something comes closer.
+func _paralysis() -> void:
+	player.global_position = Vector3(9.0, 0.05, 1.9)
+	player.rotation.y = PI / 2.0
+	player.set_pitch(deg_to_rad(-4.0))
+	world.blackout(true)
+	var result := Horror.paralysis(save, character.stat_value("nerve"), _rng)
+	var shape := horror._shape(Vector3(6.9, 0.0, 1.9), TrailerWorld.LAYER_WORLD, 6.0)
+	var tween := create_tween()
+	tween.tween_property(hud.fade, "color:a", 0.0, 1.2)
+	await tween.finished
+	Sound.play("tempt", 0.0, -2.0)
+	var approach := create_tween()
+	approach.tween_property(shape, "global_position:x", 8.25, 4.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await approach.finished
+	if result["face"]:
+		await horror._jumpscare()
+	if is_instance_valid(shape):
+		shape.queue_free()
+	world.blackout(false)
+	_after_night(result["text"])
 
 
 # Shifts -----------------------------------------------------------------------
