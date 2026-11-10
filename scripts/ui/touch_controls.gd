@@ -3,6 +3,10 @@ extends Control
 ## Phone controls: a stick wherever the left thumb lands, drag anywhere on the
 ## right to look, and buttons for use, torch and pause. Every finger is tracked
 ## on its own, so you can walk, look and press at the same time.
+##
+## If a finger's release is ever lost, a new finger on the left still takes the
+## stick and a new finger on the right still takes the look. The look follows
+## each finger's own last position.
 
 signal use_pressed
 signal light_pressed
@@ -21,11 +25,65 @@ var _stick_finger := -1
 var _stick_origin := Vector2.ZERO
 var _stick_knob := Vector2.ZERO
 var _look_finger := -1
+var _look_last := Vector2.ZERO
+## In the browser the fingers are read straight from the page: Godot's web
+## build mixes up which finger lifted when several are down. Each frame the
+## page's own list of touches (every finger keeps its identity) is compared
+## with the last frame's.
+var _web := false
+var _web_fingers := {}
+
+const WEB_SETUP := """
+(function () {
+	if (window.__dailyBreadTouches) return;
+	window.__dailyBreadTouches = {};
+	function read(e) {
+		var now = {};
+		for (var i = 0; i < e.touches.length; i++) {
+			var t = e.touches[i];
+			now[t.identifier] = [t.clientX, t.clientY];
+		}
+		window.__dailyBreadTouches = now;
+	}
+	['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (name) {
+		window.addEventListener(name, read, {passive: true, capture: true});
+	});
+})();
+"""
+const WEB_READ := "JSON.stringify({w: window.innerWidth, h: window.innerHeight, t: window.__dailyBreadTouches || {}})"
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_web = OS.has_feature("web")
+	if _web:
+		JavaScriptBridge.eval(WEB_SETUP, true)
+
+
+func _process(_delta: float) -> void:
+	if not _web or not visible or not is_processing_input():
+		return
+	var data: Variant = JSON.parse_string(str(JavaScriptBridge.eval(WEB_READ, true)))
+	if not (data is Dictionary) or float(data.get("w", 0)) <= 0.0:
+		return
+	var scale := size / Vector2(float(data["w"]), float(data["h"]))
+	var seen := {}
+	var touches: Dictionary = data["t"]
+	for id: String in touches:
+		var point: Array = touches[id]
+		var finger := 1000 + int(id)
+		var at := Vector2(float(point[0]), float(point[1])) * scale
+		seen[finger] = at
+		if _web_fingers.has(finger):
+			_move(finger, at)
+		else:
+			_press(finger, at)
+	for finger: int in _web_fingers:
+		if not seen.has(finger):
+			_release(finger)
+	_web_fingers = seen
+	queue_redraw()
 
 
 func _buttons() -> Dictionary:
@@ -39,6 +97,7 @@ func _buttons() -> Dictionary:
 
 
 func reset() -> void:
+	_web_fingers.clear()
 	_stick_finger = -1
 	_look_finger = -1
 	_stick_knob = Vector2.ZERO
@@ -48,28 +107,37 @@ func reset() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible:
+	if not visible or _web:
 		return
 	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
 			_press(touch.index, touch.position)
 		else:
-			if touch.index == _stick_finger:
-				_stick_finger = -1
-				_stick_knob = Vector2.ZERO
-				player.move_input = Vector2.ZERO
-			elif touch.index == _look_finger:
-				_look_finger = -1
+			_release(touch.index)
 		queue_redraw()
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
-		if drag.index == _stick_finger:
-			_stick_knob = (drag.position - _stick_origin).limit_length(STICK_RADIUS)
-			player.move_input = _stick_knob / STICK_RADIUS
-			queue_redraw()
-		elif drag.index == _look_finger:
-			player.look(drag.relative * LOOK_SPEED)
+		_move(drag.index, drag.position)
+
+
+func _release(finger: int) -> void:
+	if finger == _stick_finger:
+		_stick_finger = -1
+		_stick_knob = Vector2.ZERO
+		player.move_input = Vector2.ZERO
+	elif finger == _look_finger:
+		_look_finger = -1
+
+
+func _move(finger: int, at: Vector2) -> void:
+	if finger == _stick_finger:
+		_stick_knob = (at - _stick_origin).limit_length(STICK_RADIUS)
+		player.move_input = _stick_knob / STICK_RADIUS
+		queue_redraw()
+	elif finger == _look_finger:
+		player.look((at - _look_last) * LOOK_SPEED)
+		_look_last = at
 
 
 func _press(finger: int, at: Vector2) -> void:
@@ -89,12 +157,20 @@ func _press(finger: int, at: Vector2) -> void:
 				"hand":
 					hand_pressed.emit()
 			return
-	if at.x < size.x * 0.42 and _stick_finger == -1:
+	if at.x < size.x * 0.42:
+		if finger == _look_finger:
+			_look_finger = -1
 		_stick_finger = finger
 		_stick_origin = at
 		_stick_knob = Vector2.ZERO
-	elif _look_finger == -1:
+		player.move_input = Vector2.ZERO
+	else:
+		if finger == _stick_finger:
+			_stick_finger = -1
+			_stick_knob = Vector2.ZERO
+			player.move_input = Vector2.ZERO
 		_look_finger = finger
+		_look_last = at
 
 
 func _draw() -> void:
