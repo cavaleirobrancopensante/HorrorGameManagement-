@@ -25,6 +25,7 @@ func _initialize() -> void:
 	_test_shifts()
 	_test_mass()
 	_test_stand_rules()
+	_test_music()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -316,6 +317,15 @@ func _test_stand_rules() -> void:
 	_check(StandRules.eat_effect(StandRules.new_item("sausage"), 5).size() == 1, "raw meat is not eaten")
 	_check(float(StandRules.eat_effect(hot_dog, 5)["hunger"]) < 0.0, "hot dogs feed you")
 	_check(StandRules.order_text({"food": "burger", "ketchup": false, "mustard": true, "can": true}) == "Burger: mustard\n+ a can", "order text")
+
+
+func _test_music() -> void:
+	var sound: Node = root.get_node("Sound")
+	for id: String in sound.MUSIC:
+		_check(ResourceLoader.exists(sound.MUSIC[id]), "music piece exists: %s" % id)
+		_check(sound.TITLES.has(id), "music piece has a title: %s" % id)
+	for piece in ["night_shift", "outside", "overcast", "sunday", "menu", "requiem"]:
+		_check(sound.MUSIC.has(piece), "game asks for an existing piece: %s" % piece)
 
 
 func _test_damaged_file() -> void:
