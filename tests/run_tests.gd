@@ -27,6 +27,10 @@ func _initialize() -> void:
 	_test_stand_rules()
 	_test_music()
 	_test_two_fingers()
+	_test_confession()
+	_test_communion()
+	_test_temptation()
+	_test_changelog()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -391,3 +395,112 @@ func _test_damaged_file() -> void:
 	_check(saves.read_slot(3).has("damaged"), "damaged detected")
 	_check(not saves.load_slot(3), "damaged cannot load")
 	_check(saves.most_recent_living_slot() == -1, "damaged cannot continue")
+
+
+func _test_confession() -> void:
+	var save := _new_save()
+	_check(Soul.in_grace(save), "new soul in grace")
+	_check(Soul.sins(save).is_empty(), "new soul has no sins on record")
+	Soul.record(save, "gluttony", "Gluttony: two hot dogs.", false, 1)
+	_check(Soul.in_grace(save), "a venial sin keeps grace")
+	Soul.record(save, "envy", "Envy: reported a rival.", true, 4)
+	_check(not Soul.in_grace(save), "a grave sin costs grace")
+	var lines := Soul.examination(save)
+	_check(lines.size() == 2 and lines[0].begins_with("Grave:"), "examination lists grave sins first")
+	# Holding back a grave sin: nothing is forgiven, and it adds sacrilege.
+	var lean := int(save["soul"]["horror_lean"])
+	Soul.confess(save, false)
+	_check(not Soul.in_grace(save), "bad confession does not restore grace")
+	_check(Soul.sins(save).size() == 3, "bad confession adds sacrilege to the record")
+	_check(int(save["soul"]["horror_lean"]) > lean, "bad confession pushes toward the demonic")
+	# A full confession clears everything.
+	Soul.confess(save, true)
+	_check(Soul.in_grace(save), "full confession restores grace")
+	_check(Soul.sins(save).is_empty(), "full confession clears the record")
+	_check(bool(save["soul"]["penance"]), "confession gives a penance")
+	_check(Soul.fortified(save, int(save["day"])), "fortified on the day of confession")
+	_check(Soul.do_penance(save), "prayer completes the penance")
+	_check(not Soul.do_penance(save), "penance only once")
+	# Missing Sunday Mass goes on the record. Day 1 is Saturday; skip to Monday.
+	Survival.advance(save, Survival.DAY * 2.0)
+	_check(not Soul.in_grace(save), "missing Mass costs grace")
+	_check(Soul.has_grave(save), "missed Mass is on the record")
+	# Hours: evenings every day, Saturday afternoon too.
+	var saturday_afternoon := float(Survival.FIRST_SHIFT_MINUTE + 2 * 240 + 30)
+	_check(Soul.confession_open(saturday_afternoon), "confession on Saturday afternoon")
+	_check(not Soul.confession_open(saturday_afternoon + Survival.DAY * 2.0), "no confession Monday afternoon")
+	_check(Soul.confession_open(saturday_afternoon + Survival.DAY * 2.0 + 240.0), "confession Monday evening")
+	_check(not Soul.church_open(saturday_afternoon + 600.0), "church locked at night")
+
+
+func _test_communion() -> void:
+	var save := _new_save()
+	var stress := Survival.need(save, "stress")
+	Soul.receive_communion(save)
+	_check(Soul.fortified(save, int(save["day"])), "Communion fortifies for the day")
+	_check(Soul.sins(save).is_empty(), "Communion in grace adds no sin")
+	Soul.record(save, "lust", "Lust.", true, 4)
+	Soul.receive_communion(save)
+	_check(Soul.sins(save).size() == 2, "Communion in mortal sin is a sacrilege")
+	Soul.spiritual_communion(save)
+	_check(Soul.sins(save).size() == 2, "spiritual communion adds nothing")
+	_check(stress >= 0.0, "stress stays valid")
+
+
+func _test_temptation() -> void:
+	var save := _new_save()
+	var character := PlayerCharacter.from_dict(save["character"])
+	_check(Temptation.LIST.size() >= 7, "a temptation for each sin")
+	var covered := {}
+	for entry: Dictionary in Temptation.LIST:
+		covered[entry["sin"]] = true
+		_check(not GameData.sin_def(entry["sin"]).is_empty(), "temptation %s has a real sin" % entry["id"])
+	_check(covered.size() == GameData.SINS.size(), "every capital sin tempts")
+	# Stress makes temptation likelier.
+	Survival.change_need(save, "stress", -100.0)
+	var calm := Temptation.chance_per_hour(save)
+	Survival.change_need(save, "stress", 100.0)
+	_check(Temptation.chance_per_hour(save) > calm * 3.0, "stress multiplies temptation")
+	# Hatch-only temptations wait for the hatch.
+	save["world"]["hatch_open"] = false
+	_check(not Temptation.available(save, Temptation.def("change")), "no customer temptation with the hatch shut")
+	save["world"]["hatch_open"] = true
+	_check(Temptation.available(save, Temptation.def("change")), "customer temptation with the hatch open")
+	# One per shift at most.
+	var rng := _rng(3)
+	var first := {}
+	for i in 200:
+		first = Temptation.roll(save, character, rng, 1.0)
+		if not first.is_empty():
+			break
+	_check(not first.is_empty(), "temptation comes when stressed")
+	_check(Temptation.roll(save, character, rng, 50.0).is_empty(), "only one temptation per shift")
+	# Giving in pays and stains; resisting costs stress.
+	var money := Survival.money(save)
+	var result := Temptation.give_in(save, Temptation.def("report"))
+	_check(Survival.money(save) == money + 15, "giving in pays")
+	_check(not Soul.in_grace(save), "grave temptation costs grace")
+	_check(str(result["cause"]).is_empty(), "giving in does not kill")
+	Survival.change_need(save, "stress", -100.0)
+	Temptation.resist(save, Temptation.def("change"), character)
+	var cost := Survival.need(save, "stress")
+	_check(cost > 0.0, "resisting costs stress")
+	# Struggling with a sin makes resisting it harder; Communion halves it.
+	var weak := PlayerCharacter.from_dict(save["character"])
+	var strong := PlayerCharacter.from_dict(save["character"])
+	weak.sins["greed"] = 2
+	strong.sins["greed"] = -2
+	var entry := Temptation.def("change")
+	_check(Temptation.resist_cost(save, entry, weak) > Temptation.resist_cost(save, entry, strong), "besetting sin costs more to resist")
+	var before := Temptation.resist_cost(save, entry, weak)
+	Soul.confess(save, true)
+	_check(Temptation.resist_cost(save, entry, weak) < before, "fortified resists for less")
+
+
+func _test_changelog() -> void:
+	_check(Changelog.version() == str(ProjectSettings.get_setting("application/config/version")), "menu version matches project.godot")
+	var seen := {}
+	for patch: Dictionary in Changelog.PATCHES:
+		_check(not seen.has(patch["version"]), "patch versions unique")
+		seen[patch["version"]] = true
+		_check((patch["changes"] as Array).size() > 0, "patch %s lists changes" % patch["version"])

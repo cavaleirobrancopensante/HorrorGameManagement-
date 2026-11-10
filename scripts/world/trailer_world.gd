@@ -42,6 +42,8 @@ var _daylight := -1.0
 var _interior_lights: Array[OmniLight3D] = []
 var _lamp_meshes: Array[Node3D] = []
 var _bathroom_light: OmniLight3D
+## St. Brigid's, built out of sight of the street.
+var church: Church
 var _street_light: OmniLight3D
 var _street_glow: Node3D
 var _tower_light: OmniLight3D
@@ -68,6 +70,8 @@ func build() -> void:
 	_build_outside()
 	_build_street()
 	_build_cameras()
+	church = Church.new()
+	church.build(self)
 	set_daylight(0.0)
 
 
@@ -272,6 +276,11 @@ func _build_environment() -> void:
 	var holder := WorldEnvironment.new()
 	holder.environment = _environment
 	add_child(holder)
+
+
+## Inside St. Brigid's the air is clear; outside the city haze closes in.
+func set_in_church(inside: bool) -> void:
+	_environment.fog_density = 0.008 if inside else 0.03
 
 
 ## 0 is night, 1 is a grey overcast day.
@@ -736,6 +745,20 @@ func _build_street() -> void:
 	_span(Vector3(-5.5, GROUND + 22.0, 38.94), Vector3(-4.5, GROUND + 22.12, 39.06), _g("#d7bd6a"), false)
 	_span(Vector3(-5.4, GROUND + 9.0, 37.46), Vector3(-4.6, GROUND + 10.6, 37.5), _g("#c9894a"), false)
 	_span(Vector3(-5.6, GROUND, 37.46), Vector3(-4.4, GROUND + 2.6, 37.5), _g("#6b4026"), false)
+
+	# Sign at the end of the church street: the way to St. Brigid's.
+	_cyl(0.05, 2.4, Vector3(-4.6, GROUND + 1.2, 16.3), pole)
+	_span(Vector3(-5.3, GROUND + 1.9, 16.26), Vector3(-3.9, GROUND + 2.3, 16.3), _c("#2b3a4a"), false)
+	var arrow := Label3D.new()
+	arrow.text = "St. Brigid's  >"
+	arrow.font = UiKit.title_font()
+	arrow.font_size = 64
+	arrow.pixel_size = 0.0035
+	arrow.modulate = Color("#e6e0d2")
+	arrow.position = Vector3(-4.6, GROUND + 2.1, 16.25)
+	arrow.rotation.y = PI
+	add_child(arrow)
+	_zone(Vector3(-5.4, GROUND, 16.0), Vector3(-3.8, GROUND + 2.4, 16.6), "church_street")
 
 	# Something that only the cameras see.
 	_figure = Sprite3D.new()

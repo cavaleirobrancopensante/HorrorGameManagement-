@@ -39,6 +39,7 @@ static func ensure(save: Dictionary) -> void:
 		world["notices"] = []
 	if not (save.get("soul") is Dictionary):
 		save["soul"] = {"state_of_grace": true, "horror_lean": 0}
+	Soul.ensure(save)
 	if not (save.get("survival") is Dictionary):
 		var character := PlayerCharacter.from_dict(save.get("character", {}))
 		var survival := {
@@ -152,8 +153,7 @@ static func sleep(save: Dictionary) -> String:
 static func _end_of_day(save: Dictionary, day: int) -> void:
 	if weekday_of_day(day) != 0 or attended_mass(save, day):
 		return
-	save["soul"]["state_of_grace"] = false
-	change_lean(save, 3)
+	Soul.record(save, "mass", "You missed Sunday Mass.", true, 3)
 	notify(save, "You missed Sunday Mass. You are no longer in a state of grace.")
 
 
