@@ -116,9 +116,11 @@ func _order_card(index: int) -> Dictionary:
 	var bar := ColorRect.new()
 	bar.color = UiKit.LITURGICAL_GOLD
 	bar_back.add_child(bar)
+	var clock := UiKit.label("", 19, UiKit.ASH)
+	column.add_child(clock)
 	var serve := UiKit.button("Serve", stand.serve.bind(index))
 	column.add_child(serve)
-	return {"root": root, "text": text, "bar_back": bar_back, "bar": bar, "serve": serve}
+	return {"root": root, "text": text, "bar_back": bar_back, "bar": bar, "clock": clock, "serve": serve}
 
 
 func _process(_delta: float) -> void:
@@ -138,7 +140,10 @@ func _refresh() -> void:
 			var bar: ColorRect = card["bar"]
 			bar.size = Vector2((card["bar_back"] as Control).size.x * left, 8)
 			bar.color = UiKit.LITURGICAL_GOLD if left > 0.5 else (UiKit.SODIUM if left > 0.25 else Color("#ff4a55"))
+			var tip := StandRules.tip(left, game.character.stat_value("charm"))
+			(card["clock"] as Label).text = "Leaves in %d s, tip now %d" % [ceili(customer.patience), tip]
 		else:
+			(card["clock"] as Label).text = ""
 			(card["text"] as Label).text = "On the way" if customer != null and is_instance_valid(customer) else "No one"
 			(card["bar"] as ColorRect).size = Vector2.ZERO
 	for i in _slot_buttons.size():
