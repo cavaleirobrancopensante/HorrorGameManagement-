@@ -22,6 +22,9 @@ var hand: Node3D
 var move_input := Vector2.ZERO
 var controls_enabled := true
 var focused: Interactable = null
+## Whatever the look ray touches within reach: {"position", "normal", "collider"},
+## or {}. Used to put things down anywhere.
+var aim: Dictionary = {}
 var _pitch := 0.0
 var _bob := 0.0
 var _step := 0.0
@@ -117,9 +120,12 @@ func _update_focus() -> void:
 		var query := PhysicsRayQueryParameters3D.create(from, from - camera.global_basis.z * REACH)
 		query.exclude = [get_rid()]
 		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		aim = hit
 		var collider: Object = hit.get("collider")
 		if collider is Interactable:
 			target = collider
+	else:
+		aim = {}
 	if target != focused:
 		focused = target
 		focus_changed.emit(target)

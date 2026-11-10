@@ -5,6 +5,24 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.6.0", "date": "10 Nov 2026", "title": "A smoother kitchen",
+		"changes": [
+			"Put anything down anywhere: look at a counter, a shelf or the floor and press use. Two rolls fit side by side on the prep board.",
+			"Meat cooks wherever it sits on the grill. Put meat and rolls together where they lie, whichever one you are holding.",
+			"Food belongs on the grill, the serving counter and the prep board. Set down anywhere else, customers mind. On the floor or a filthy counter, they refuse it.",
+			"Counters get greasy with use and show it. Wipe them with cleaning spray.",
+			"A big green bin by the end of the serving counter, labelled.",
+			"Sauce bottles hold 15 portions and run out. Refill them from stock. Mayonnaise joins ketchup and mustard.",
+			"With food in your hand, look at a sauce bottle to add sauce without putting anything down.",
+			"Customers show how they feel: a happy, flat or angry face and a mood bar. Waiting wears them down; happier customers tip more; at the end they walk off.",
+			"Out of something? Look at the customer and tell them. They settle for something else, unhappier, or leave.",
+			"Deliveries now land at the start of the shift after next. Plan ahead.",
+			"Upgrades: a street TV keeps customers patient, a pro griddle cooks faster and burns slower, large sauce bottles, and a neon sign brings more customers. They are delivered and installed when you carry them in.",
+			"Hints for the next step, shown only until you have done that step once.",
+			"Temptations are personal: the angry drunk now insults your cooking and your trailer. Temptations never attack the faith; defending it is not a sin.",
+		],
+	},
+	{
 		"version": "0.5.0", "date": "10 Nov 2026", "title": "St. Brigid's",
 		"changes": [
 			"Walk to St. Brigid's from the sign at the end of the church street. It is open from morning to the end of the evening shift.",

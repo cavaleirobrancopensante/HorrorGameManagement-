@@ -225,7 +225,7 @@ func _build_shop() -> void:
 		elif waiting > 0:
 			arrival.text = "A delivery is waiting outside your door"
 		else:
-			arrival.text = "Drones deliver to your door within 45 minutes"
+			arrival.text = "Order now: lands at %s" % Survival.clock_text(Survival.delivery_time(Survival.now(game.save)))
 	)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -235,8 +235,12 @@ func _build_shop() -> void:
 	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rows.add_theme_constant_override("separation", 6)
 	scroll.add_child(rows)
+	rows.add_child(UiKit.label("Drones fly at the start of each shift. What you order lands at the start of the shift after next, so plan ahead.", 20, DIM))
 	for product: Dictionary in GameData.PRODUCTS:
 		rows.add_child(_shop_row(product))
+	rows.add_child(UiKit.label("Upgrades", 28, PHOSPHOR))
+	for upgrade: Dictionary in GameData.UPGRADES:
+		rows.add_child(_upgrade_row(upgrade))
 
 
 func _shop_row(product: Dictionary) -> Control:
@@ -262,6 +266,36 @@ func _shop_row(product: Dictionary) -> Control:
 	_live_labels.append(func() -> void:
 		owned.text = "You have %d" % Survival.stock(game.save, id)
 		buy.disabled = Survival.money(game.save) < int(product["price"])
+	)
+	return row
+
+
+func _upgrade_row(upgrade: Dictionary) -> Control:
+	var id: String = upgrade["id"]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.add_theme_constant_override("separation", -4)
+	text.add_child(UiKit.label(upgrade["name"], 26, PHOSPHOR))
+	var desc := UiKit.wrapped_label(upgrade["desc"], 20, DIM)
+	text.add_child(desc)
+	row.add_child(text)
+	var state := UiKit.label("", 22, DIM)
+	state.custom_minimum_size.x = 130
+	row.add_child(state)
+	var price := UiKit.label("%d credits" % upgrade["price"], 24, PHOSPHOR)
+	price.custom_minimum_size.x = 120
+	price.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(price)
+	var buy := _screen_button("Buy", _order.bind(id))
+	buy.custom_minimum_size.x = 130
+	row.add_child(buy)
+	_live_labels.append(func() -> void:
+		var owned := Survival.has_upgrade(game.save, id)
+		var coming := Survival.upgrade_coming(game.save, id)
+		state.text = "Installed" if owned else ("On its way" if coming else "")
+		buy.disabled = owned or coming or Survival.money(game.save) < int(upgrade["price"])
 	)
 	return row
 

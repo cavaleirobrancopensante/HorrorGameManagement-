@@ -29,6 +29,17 @@ static func ensure(save: Dictionary) -> void:
 		world["stock"] = GameData.STARTING_STOCK.duplicate()
 	if not (world.get("deliveries") is Array):
 		world["deliveries"] = []
+	if not (world.get("upgrades") is Dictionary):
+		world["upgrades"] = {}
+	if not (world.get("dirt") is Dictionary):
+		world["dirt"] = {}
+	if not (world.get("learned") is Dictionary):
+		world["learned"] = {}
+	if not (world.get("bottles") is Dictionary):
+		world["bottles"] = {}
+	for id: String in GameData.STARTING_STOCK:
+		if not (world["stock"] as Dictionary).has(id):
+			world["stock"][id] = 0 if id in ["sausages", "patties", "buns", "soda", "meals", "coffee", "candles"] else GameData.STARTING_STOCK[id]
 	if not world.has("hatch_open"):
 		world["hatch_open"] = false
 	if not world.has("candle_day"):
@@ -323,26 +334,48 @@ static func take_stock(save: Dictionary, id: String, count := 1) -> bool:
 
 # Shop and deliveries ----------------------------------------------------------
 
-## Pays for one pack. Orders placed before a drone leaves share that drone.
-## Returns "" on success, or what went wrong.
+## Drones fly at the start of each shift. An order lands at the start of the
+## shift after next, so you have to plan a shift or two ahead.
+static func delivery_time(minutes: float) -> float:
+	return shift_end(minutes) + SHIFT_MINUTES
+
+
+static func has_upgrade(save: Dictionary, id: String) -> bool:
+	return bool(save["world"]["upgrades"].get(id, false))
+
+
+## An upgrade you have paid for that has not been carried in yet.
+static func upgrade_coming(save: Dictionary, id: String) -> bool:
+	for delivery: Dictionary in save["world"]["deliveries"]:
+		if (delivery["items"] as Dictionary).has(id):
+			return true
+	return false
+
+
+## Pays for one pack, or one upgrade. Orders that land at the same time share
+## a drone. Returns "" on success, or what went wrong.
 static func order(save: Dictionary, product_id: String) -> String:
 	var product := GameData.product_def(product_id)
 	if product.is_empty():
 		return "That product does not exist."
+	var upgrade := not GameData.upgrade_def(product_id).is_empty()
+	if upgrade and (has_upgrade(save, product_id) or upgrade_coming(save, product_id)):
+		return "You already have that."
 	var price: int = product["price"]
 	if money(save) < price:
 		return "Not enough money."
 	save["survival"]["money"] = money(save) - price
 	var deliveries: Array = save["world"]["deliveries"]
+	var arrive := delivery_time(now(save))
 	var pending := {}
 	for delivery: Dictionary in deliveries:
-		if float(delivery["arrive"]) > now(save):
+		if is_equal_approx(float(delivery["arrive"]), arrive):
 			pending = delivery
 	if pending.is_empty():
-		pending = {"arrive": now(save) + GameData.DELIVERY_MINUTES, "items": {}}
+		pending = {"arrive": arrive, "items": {}}
 		deliveries.append(pending)
 	var items: Dictionary = pending["items"]
-	items[product_id] = int(items.get(product_id, 0)) + int(product["units"])
+	items[product_id] = int(items.get(product_id, 0)) + (1 if upgrade else int(product["units"]))
 	return ""
 
 
@@ -376,7 +409,10 @@ static func collect(save: Dictionary) -> Dictionary:
 			gathered[id] = int(gathered.get(id, 0)) + int(items[id])
 	save["world"]["deliveries"] = remaining
 	for id: String in gathered:
-		add_stock(save, id, gathered[id])
+		if GameData.upgrade_def(id).is_empty():
+			add_stock(save, id, gathered[id])
+		else:
+			save["world"]["upgrades"][id] = true
 	return gathered
 
 

@@ -21,7 +21,9 @@ var _toast_time := 0.0
 var _hint := ""
 var _holding := ""
 var _can_eat := false
-## Order bubbles over customers: [screen point, text, colour].
+## The next step, shown the first few times you do something.
+var _step := ""
+## Order bubbles over customers: [screen point, text, colour, mood].
 var bubbles: Array = []
 
 
@@ -41,6 +43,10 @@ func refresh() -> void:
 
 func set_prompt(text: String) -> void:
 	_prompt = text
+
+
+func set_step(text: String) -> void:
+	_step = text
 
 
 func set_holding(text: String, can_eat: bool) -> void:
@@ -96,7 +102,7 @@ func _draw() -> void:
 	_text(font, Vector2(right - 340, 96), "%d credits" % Survival.money(save), 22, UiKit.LITURGICAL_GOLD, 340)
 
 	for bubble: Array in bubbles:
-		_bubble(font, bubble[0], bubble[1], bubble[2])
+		_bubble(font, bubble[0], bubble[1], bubble[2], float(bubble[3]) if bubble.size() > 3 else -1.0)
 
 	var center := size / 2.0
 	if _prompt.is_empty():
@@ -113,12 +119,9 @@ func _draw() -> void:
 			eat = "   (Eat button)" if touch_mode else "   (Q to eat)"
 		var holding_y := size.y - (190.0 if touch_mode else 80.0)
 		_text(font, Vector2(0, holding_y), _holding + eat, 22, UiKit.LITURGICAL_GOLD, size.x, HORIZONTAL_ALIGNMENT_CENTER)
-	if not _holding.is_empty():
-		var eat := ""
-		if _can_eat:
-			eat = "   (Eat button)" if touch_mode else "   (Q to eat)"
-		var holding_y := size.y - (190.0 if touch_mode else 80.0)
-		_text(font, Vector2(0, holding_y), _holding + eat, 22, UiKit.LITURGICAL_GOLD, size.x, HORIZONTAL_ALIGNMENT_CENTER)
+	if not _step.is_empty():
+		var step_y := size.y - (270.0 if touch_mode else 160.0)
+		_text(font, Vector2(0, step_y), _step, 24, Color("#a8d8b4"), size.x, HORIZONTAL_ALIGNMENT_CENTER)
 	if _toast_time > 0.0:
 		var alpha := clampf(_toast_time, 0.0, 1.0)
 		_text(font, Vector2(0, 150), _toast, 26, Color(UiKit.TALLOW, alpha), size.x, HORIZONTAL_ALIGNMENT_CENTER)
@@ -126,18 +129,42 @@ func _draw() -> void:
 		_text(font, Vector2(0, size.y - 40), _hint, 22, UiKit.ASH, size.x, HORIZONTAL_ALIGNMENT_CENTER)
 
 
-func _bubble(font: Font, anchor: Vector2, text: String, colour: Color) -> void:
+func _bubble(font: Font, anchor: Vector2, text: String, colour: Color, mood := -1.0) -> void:
 	var lines := text.split("\n")
 	var width := 0.0
 	for line in lines:
 		width = maxf(width, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x)
-	var box := Rect2(anchor - Vector2(width / 2.0 + 10.0, lines.size() * 24.0 + 18.0), Vector2(width + 20.0, lines.size() * 24.0 + 10.0))
+	var face_room := 36.0 if mood >= 0.0 else 0.0
+	var bar_room := 10.0 if mood >= 0.0 else 0.0
+	var box := Rect2(anchor - Vector2((width + face_room) / 2.0 + 10.0, lines.size() * 24.0 + 18.0 + bar_room), Vector2(width + face_room + 20.0, lines.size() * 24.0 + 10.0 + bar_room))
 	draw_rect(box, Color(UiKit.COMPLINE, 0.85))
 	draw_rect(box, Color(colour, 0.8), false, 2.0)
+	if mood >= 0.0:
+		_face(box.position + Vector2(box.size.x - 22.0, 22.0), mood, colour)
+		var bar := Rect2(box.position + Vector2(8.0, box.size.y - 12.0), Vector2(box.size.x - 16.0, 5.0))
+		draw_rect(bar, Color(UiKit.VESTMENT_LIGHT, 0.7))
+		draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(mood / 100.0, 0.0, 1.0), bar.size.y)), colour)
 	var tail := PackedVector2Array([anchor + Vector2(-7, -8), anchor + Vector2(7, -8), anchor])
 	draw_colored_polygon(tail, Color(colour, 0.8))
 	for i in lines.size():
 		draw_string(font, Vector2(box.position.x + 10.0, box.position.y + 24.0 + i * 24.0), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 20, colour if i == lines.size() - 1 else UiKit.TALLOW)
+
+
+## A smiling, flat or angry face for a customer's mood.
+func _face(center: Vector2, mood: float, colour: Color) -> void:
+	draw_circle(center, 12.0, Color(colour, 0.9))
+	var ink := UiKit.COMPLINE
+	draw_rect(Rect2(center + Vector2(-6, -5), Vector2(3, 4)), ink)
+	draw_rect(Rect2(center + Vector2(3, -5), Vector2(3, 4)), ink)
+	match StandRules.face(mood):
+		"happy":
+			draw_arc(center + Vector2(0, 1), 6.0, 0.3, PI - 0.3, 8, ink, 2.0)
+		"neutral":
+			draw_line(center + Vector2(-5, 5), center + Vector2(5, 5), ink, 2.0)
+		_:
+			draw_arc(center + Vector2(0, 10), 6.0, PI + 0.4, TAU - 0.4, 8, ink, 2.0)
+			draw_line(center + Vector2(-7, -8), center + Vector2(-2, -6), ink, 2.0)
+			draw_line(center + Vector2(7, -8), center + Vector2(2, -6), ink, 2.0)
 
 
 func _text(font: Font, at: Vector2, text: String, font_size: int, colour: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_RIGHT) -> void:

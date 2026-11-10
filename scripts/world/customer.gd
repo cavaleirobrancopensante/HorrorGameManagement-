@@ -8,8 +8,10 @@ const WALK_SPEED := 1.3
 const SHIRTS := ["#4a5a6e", "#6e3b33", "#3f5a43", "#5c5048", "#2f2f38", "#7a6a3a", "#4e3a5c"]
 
 var order := {}
-var patience := 0.0
-var max_patience := 1.0
+## 0 to 100. Waiting wears it down; they leave at 0. Shown as a face.
+var mood := 80.0
+## Mood lost per second of waiting.
+var decay := 1.0
 var at_hatch := false
 var leaving := false
 var has_food := false
@@ -17,11 +19,11 @@ var has_can := false
 var _tween: Tween
 
 
-static func create(look_rng: RandomNumberGenerator, wanted: Dictionary, wait_seconds: float) -> Customer:
+static func create(look_rng: RandomNumberGenerator, wanted: Dictionary, start_mood: float, mood_decay: float) -> Customer:
 	var customer := Customer.new()
 	customer.order = wanted
-	customer.patience = wait_seconds
-	customer.max_patience = wait_seconds
+	customer.mood = start_mood
+	customer.decay = mood_decay
 
 	var person := PlayerCharacter.new()
 	person.randomize_appearance(look_rng)
@@ -81,8 +83,8 @@ func leave(street: Vector3) -> void:
 	walk_to(street, queue_free)
 
 
-func patience_left() -> float:
-	return patience / max_patience
+func upset(amount: float) -> void:
+	mood = maxf(mood - amount, 0.0)
 
 
 func is_complete() -> bool:
@@ -94,16 +96,20 @@ func bubble_point() -> Vector3:
 	return global_position + Vector3(0.0, 2.0, 0.0)
 
 
-## The order, what has arrived and the time left, for the bubble.
+## The order, what has arrived and the tip on offer, for the bubble.
 func bubble_text(charm: int) -> String:
 	var lines := StandRules.order_text(order)
 	if has_food:
 		lines = lines.replace(lines.get_slice("\n", 0), "Food: done")
 	if has_can:
 		lines = lines.replace("+ a can", "Can: done")
-	return "%s\n%d s, tip %d" % [lines, ceili(patience), StandRules.tip(patience_left(), charm)]
+	return "%s\nTip %d" % [lines, StandRules.tip(mood, charm)]
 
 
 func bubble_colour() -> Color:
-	var left := patience_left()
-	return UiKit.TALLOW if left > 0.5 else (UiKit.SODIUM if left > 0.25 else Color("#ff6a70"))
+	match StandRules.face(mood):
+		"happy":
+			return UiKit.TALLOW
+		"neutral":
+			return UiKit.SODIUM
+	return Color("#ff6a70")
