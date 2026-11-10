@@ -26,6 +26,7 @@ func _initialize() -> void:
 	_test_mass()
 	_test_stand_rules()
 	_test_music()
+	_test_two_fingers()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -326,6 +327,59 @@ func _test_music() -> void:
 		_check(sound.TITLES.has(id), "music piece has a title: %s" % id)
 	for piece in ["night_shift", "outside", "overcast", "sunday", "menu", "requiem"]:
 		_check(sound.MUSIC.has(piece), "game asks for an existing piece: %s" % piece)
+
+
+func _touch(controls: Variant, finger: int, at: Vector2, down: bool) -> void:
+	var event := InputEventScreenTouch.new()
+	event.index = finger
+	event.position = at
+	event.pressed = down
+	controls._input(event)
+
+
+func _drag(controls: Variant, finger: int, at: Vector2, relative: Vector2) -> void:
+	var event := InputEventScreenDrag.new()
+	event.index = finger
+	event.position = at
+	event.relative = relative
+	controls._input(event)
+
+
+## Walking with one thumb while looking with another finger: the look must follow
+## only its own finger, even when the two fingers' events interleave.
+func _test_two_fingers() -> void:
+	# Loaded at run time: these scripts use the Sound autoload, which only exists once the tree is up.
+	var player: Variant = load("res://scripts/world/player.gd").new()
+	var controls: Variant = load("res://scripts/ui/touch_controls.gd").new()
+	var look_speed: float = controls.LOOK_SPEED
+	controls.player = player
+	controls.size = Vector2(1280, 720)
+	_touch(controls, 0, Vector2(200, 560), true)
+	_drag(controls, 0, Vector2(200, 500), Vector2(0, -60))
+	_check(player.move_input.y < -0.5, "the stick walks")
+	_touch(controls, 1, Vector2(900, 400), true)
+	var start: float = player.rotation.y
+	for k in range(1, 11):
+		# Wrong "relative" values, as the web build sends them, must not matter.
+		_drag(controls, 0, Vector2(203, 500), Vector2(-697, 100))
+		_drag(controls, 1, Vector2(900 - k * 10, 400), Vector2(697, -100))
+	var turned: float = player.rotation.y - start
+	_check(is_equal_approx(turned, 100.0 * look_speed), "the look follows its own finger: %f" % turned)
+	_check(player.move_input.y < -0.5, "still walking while looking")
+	_touch(controls, 1, Vector2(800, 400), false)
+	_touch(controls, 2, Vector2(900, 300), true)
+	start = player.rotation.y
+	_drag(controls, 2, Vector2(880, 300), Vector2.ZERO)
+	_check(is_equal_approx(player.rotation.y - start, 20.0 * look_speed), "a new finger looks again")
+	_touch(controls, 0, Vector2(203, 500), false)
+	_check(player.move_input == Vector2.ZERO, "lifting the thumb stops walking")
+	# A lost release: the next finger on the right still takes the look.
+	_touch(controls, 7, Vector2(900, 300), true)
+	start = player.rotation.y
+	_drag(controls, 7, Vector2(910, 300), Vector2.ZERO)
+	_check(not is_equal_approx(player.rotation.y, start), "a lost release does not block looking")
+	controls.free()
+	player.free()
 
 
 func _test_damaged_file() -> void:
