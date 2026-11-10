@@ -12,6 +12,8 @@ var world: TrailerWorld
 var player: Player
 var hud: GameHud
 var touch: TouchControls
+var stand: Stand
+var character: PlayerCharacter
 
 var _touch_mode := false
 var _paused := false
@@ -23,7 +25,6 @@ var _flicker_wait := 50.0
 var _arrived := 0
 var _day := 0
 var _shift := -1
-var _character: PlayerCharacter
 var _rng := RandomNumberGenerator.new()
 
 
@@ -33,14 +34,14 @@ func _ready() -> void:
 		return
 	save = Saves.current
 	Survival.ensure(save)
-	_character = Saves.current_character()
+	character = Saves.current_character()
 	_rng.randomize()
 	_touch_mode = DisplayServer.is_touchscreen_available()
 	Sound.play_music("hum")
 	_build()
 	_restore()
 	if not _touch_mode:
-		hud.show_hint("Click to look around. WASD to move, E to use, F for the torch, C to plan the day, Esc to pause.")
+		hud.show_hint("Click to look around. WASD to move, E or click to use, Q or right click to eat what you hold, F torch, C plan the day, Esc pause.")
 
 
 func _build() -> void:
@@ -59,6 +60,7 @@ func _build() -> void:
 	world.build()
 	player = Player.new()
 	viewport.add_child(player)
+	player.camera.make_current()
 	world.mirror.viewer = player.camera
 	player.body_sprite.texture = _make_body_texture()
 	player.stepped.connect(func() -> void: Sound.play("step", 0.12, -8.0))
@@ -74,6 +76,11 @@ func _build() -> void:
 	touch.light_pressed.connect(_toggle_light)
 	touch.pause_pressed.connect(go_back)
 	touch.plan_pressed.connect(_open_planner)
+	touch.hand_pressed.connect(_use_hand)
+	stand = Stand.new()
+	add_child(stand)
+	stand.setup(self)
+	stand.message.connect(hud.toast)
 	_set_busy(false)
 
 
@@ -122,6 +129,7 @@ func _process(delta: float) -> void:
 		if not cause.is_empty():
 			_die(cause)
 			return
+		stand.tick(delta)
 		_check_arrivals()
 		_update_day()
 		_update_shift()
@@ -137,6 +145,11 @@ func _process(delta: float) -> void:
 			world.flicker()
 	var target := player.focused
 	hud.set_prompt("" if _busy or target == null else _prompt_for(target))
+	hud.set_holding("" if _busy else stand.held_text(), stand.can_eat_held())
+	hud.bubbles = [] if _busy else stand.bubbles(player.camera, float(PIXEL_SCALE))
+	if touch.hand_ready != stand.can_eat_held():
+		touch.hand_ready = stand.can_eat_held()
+		touch.queue_redraw()
 	if touch.use_ready != (target != null):
 		touch.use_ready = target != null
 		touch.queue_redraw()
@@ -180,6 +193,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("flashlight"):
 		_toggle_light()
 		return
+	if event.is_action_pressed("use_hand"):
+		_use_hand()
+		return
 	if event.is_action_pressed("plan_day"):
 		_open_planner()
 		return
@@ -192,6 +208,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				hud.show_hint("")
 		elif (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 			_interact()
+		elif (event as InputEventMouseButton).button_index == MOUSE_BUTTON_RIGHT:
+			_use_hand()
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not _busy:
 		player.look((event as InputEventMouseMotion).relative * MOUSE_SPEED)
 
@@ -248,6 +266,12 @@ func _notification(what: int) -> void:
 		_save_now()
 
 
+func _use_hand() -> void:
+	if _busy or _dead or _paused:
+		return
+	stand.use_held()
+
+
 func _toggle_light() -> void:
 	if _busy or _dead:
 		return
@@ -260,6 +284,9 @@ func _toggle_light() -> void:
 # Using things -----------------------------------------------------------------
 
 func _prompt_for(target: Interactable) -> String:
+	var kitchen := stand.prompt_for(target)
+	if not kitchen.is_empty() or target.id == "customer":
+		return kitchen
 	match target.id:
 		"door":
 			return (target.get_meta("door") as Door).prompt()
@@ -277,14 +304,10 @@ func _prompt_for(target: Interactable) -> String:
 			if Survival.stock(save, "sausages") > 0 and Survival.stock(save, "buns") > 0:
 				return "Eat a sausage roll from the stock"
 			return "Fridge (empty)"
-		"cooler":
-			return "Drink a can" if Survival.stock(save, "soda") > 0 else "Drinks cooler (empty)"
 		"coffee":
 			return "Make coffee" if Survival.stock(save, "coffee") > 0 else "Kettle (no coffee left)"
 		"shelves":
 			return "Check the stock"
-		"grill":
-			return "Grill"
 		"hatch":
 			return "Close the hatch" if bool(save["world"]["hatch_open"]) else "Open the hatch"
 		"delivery":
@@ -300,6 +323,8 @@ func _interact() -> void:
 	var target := player.focused
 	if target == null:
 		return
+	if stand.use(target):
+		return
 	match target.id:
 		"door":
 			(target.get_meta("door") as Door).toggle()
@@ -313,14 +338,6 @@ func _interact() -> void:
 			hud.toast("You drink from the tap. The water tastes of rust.")
 		"fridge":
 			_eat()
-		"cooler":
-			if Survival.take_stock(save, "soda"):
-				Survival.change_need(save, "thirst", -30.0)
-				Survival.change_need(save, "stress", -3.0)
-				Sound.play("can")
-				hud.toast("You drink a can of your own stock.")
-			else:
-				hud.toast("No cans left. Order more on the computer.")
 		"coffee":
 			if Survival.take_stock(save, "coffee"):
 				Survival.change_need(save, "tiredness", -20.0)
@@ -331,8 +348,6 @@ func _interact() -> void:
 				hud.toast("No coffee left. Order more on the computer.")
 		"shelves":
 			_show_stock()
-		"grill":
-			hud.toast("The grill is cold. Cooking and customers come in the next build.")
 		"hatch":
 			var open := not bool(save["world"]["hatch_open"])
 			save["world"]["hatch_open"] = open
@@ -452,10 +467,11 @@ func spend_shift(id: String) -> void:
 	var tween := create_tween()
 	tween.tween_property(hud.fade, "color:a", 1.0, 0.7)
 	await tween.finished
+	stand.clear()
 	if id == "work":
 		save["world"]["hatch_open"] = true
 		world.set_hatch_open(true, false)
-	var result := Survival.spend_shift(save, id, _character, _rng)
+	var result := Survival.spend_shift(save, id, character, _rng)
 	if not str(result["cause"]).is_empty():
 		_die(result["cause"])
 		return

@@ -5,7 +5,7 @@ const MUSIC := {
 	"menu": "res://assets/audio/menu_drone.ogg",
 	"hum": "res://assets/audio/room_hum.ogg",
 }
-const EFFECTS := ["click", "bell", "step", "door", "beep", "drone", "buzz", "water", "can"]
+const EFFECTS := ["click", "bell", "step", "door", "beep", "drone", "buzz", "water", "can", "till"]
 const FILES := {"click": "ui_click"}
 const POOL_SIZE := 6
 

@@ -11,6 +11,9 @@ const CENTER := 20
 
 ## Draws the whole body on a clear background instead of a framed portrait.
 var full_body := false
+## Customers wear their own clothes instead of the cook's apron.
+var apron := true
+var shirt_colour := Color("#4b4a55")
 
 var character: PlayerCharacter:
 	set(value):
@@ -77,16 +80,17 @@ func _draw_body(look: Dictionary, skin: Color, woman: bool) -> void:
 	var half := {"lean": 13, "average": 15, "heavy": 18}.get(look["build"], 15) as int
 	if woman:
 		half -= 2
-	var shirt := Color("#4b4a55")
-	var apron := Color(GameData.APRON_COLOURS.get(look["apron"], "#b9b3a4"))
+	var shirt := shirt_colour
+	var apron_colour := Color(GameData.APRON_COLOURS.get(look["apron"], "#b9b3a4"))
 	_r(CENTER - 4, 31, 8, 8, skin.darkened(0.28))
 	_r(CENTER - half + 2, 38, half * 2 - 4, 2, shirt)
 	_r(CENTER - half, 40, half * 2, 8, shirt)
 	_r(CENTER + half - 5, 40, 5, 8, shirt.darkened(0.3))
-	_r(CENTER - 9, 42, 18, 6, apron)
-	_r(CENTER + 4, 42, 5, 6, apron.darkened(0.25))
-	_r(CENTER - 8, 38, 3, 4, apron.darkened(0.1))
-	_r(CENTER + 5, 38, 3, 4, apron.darkened(0.25))
+	if apron:
+		_r(CENTER - 9, 42, 18, 6, apron_colour)
+		_r(CENTER + 4, 42, 5, 6, apron_colour.darkened(0.25))
+		_r(CENTER - 8, 38, 3, 4, apron_colour.darkened(0.1))
+		_r(CENTER + 5, 38, 3, 4, apron_colour.darkened(0.25))
 
 
 func _draw_lower_body(look: Dictionary, skin: Color, woman: bool) -> void:
@@ -94,10 +98,10 @@ func _draw_lower_body(look: Dictionary, skin: Color, woman: bool) -> void:
 	if woman:
 		half -= 2
 	var waist := half - 2
-	var shirt := Color("#4b4a55")
+	var shirt := shirt_colour
 	var trousers := Color("#2b2833")
 	var shoes := Color("#141216")
-	var apron := Color(GameData.APRON_COLOURS.get(look["apron"], "#b9b3a4"))
+	var apron_colour := Color(GameData.APRON_COLOURS.get(look["apron"], "#b9b3a4"))
 	_r(CENTER - waist + 1, 96, waist - 2, 54, trousers)
 	_r(CENTER + 1, 96, waist - 2, 54, trousers.darkened(0.25))
 	_r(CENTER - waist, 150, waist, 8, shoes)
@@ -110,9 +114,10 @@ func _draw_lower_body(look: Dictionary, skin: Color, woman: bool) -> void:
 	_r(CENTER + half - 4, 44, 4, 46, shirt.darkened(0.4))
 	_r(CENTER - half, 90, 4, 7, skin)
 	_r(CENTER + half - 4, 90, 4, 7, skin.darkened(0.3))
-	_r(CENTER - 9, 42, 18, 70, apron)
-	_r(CENTER + 4, 42, 5, 70, apron.darkened(0.25))
-	_r(CENTER - waist, 76, waist * 2, 1, apron.darkened(0.35))
+	if apron:
+		_r(CENTER - 9, 42, 18, 70, apron_colour)
+		_r(CENTER + 4, 42, 5, 70, apron_colour.darkened(0.25))
+		_r(CENTER - waist, 76, waist * 2, 1, apron_colour.darkened(0.35))
 
 
 func _draw_head(half_widths: Array, skin: Color) -> void:

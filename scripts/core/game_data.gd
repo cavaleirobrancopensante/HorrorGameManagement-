@@ -33,6 +33,7 @@ const SHIFTS := ["Morning", "Noon", "Afternoon", "Evening", "Night", "Dead shift
 ## Customers in a full shift at the stand, before skills.
 const SHIFT_CUSTOMERS := [6, 12, 8, 12, 5, 2]
 const HOT_DOG_PRICE := 4
+const BURGER_PRICE := 6
 const CAN_PRICE := 2
 
 ## What a shift can be spent on. Rates are per game hour, like the awake rates.
@@ -69,13 +70,14 @@ const ACTIVITIES := [
 ## Shop. Units are what one order adds to your stock.
 const PRODUCTS := [
 	{"id": "sausages", "name": "Sausages", "pack": "Pack of 10", "units": 10, "price": 12, "desc": "For the grill."},
+	{"id": "patties", "name": "Burger patties", "pack": "Pack of 10", "units": 10, "price": 15, "desc": "For the grill."},
 	{"id": "buns", "name": "Bread rolls", "pack": "Pack of 10", "units": 10, "price": 6, "desc": "For the grill."},
 	{"id": "soda", "name": "Fizzy drinks", "pack": "Case of 12 cans", "units": 12, "price": 10, "desc": "To sell, or to drink."},
 	{"id": "meals", "name": "Ready meals", "pack": "Pack of 3", "units": 3, "price": 9, "desc": "Your own food. Kept in the fridge."},
 	{"id": "coffee", "name": "Coffee", "pack": "Bag for 10 cups", "units": 10, "price": 5, "desc": "Keeps you awake."},
 	{"id": "candles", "name": "Candles", "pack": "Pack of 3", "units": 3, "price": 4, "desc": "For prayer at home."},
 ]
-const STARTING_STOCK := {"sausages": 10, "buns": 10, "soda": 6, "meals": 2, "coffee": 3, "candles": 1}
+const STARTING_STOCK := {"sausages": 10, "patties": 6, "buns": 10, "soda": 6, "meals": 2, "coffee": 3, "candles": 1}
 const DELIVERY_MINUTES := 45
 
 ## State news on the computer. Which pool feeds the day's headlines depends on

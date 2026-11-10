@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_test_calendar()
 	_test_shifts()
 	_test_mass()
+	_test_stand_rules()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -274,6 +275,47 @@ func _test_mass() -> void:
 	_check(not bool(lazy["soul"]["state_of_grace"]), "missing Mass loses grace")
 	_check(Survival.take_notices(lazy).size() == 1, "missed Mass notice")
 	_check(Survival.take_notices(lazy).is_empty(), "notices are taken once")
+
+
+func _test_stand_rules() -> void:
+	var sausage := StandRules.new_item("sausage")
+	var bun := StandRules.new_item("bun")
+	_check(StandRules.cook_state(sausage, 5) == "raw", "starts raw")
+	_check(str(StandRules.combine(bun, sausage, 5)) == "Cook it first.", "raw meat refused")
+	sausage["cook"] = StandRules.COOK_SECONDS + 1.0
+	_check(StandRules.cook_state(sausage, 5) == "cooked", "cooks")
+	var hot_dog: Dictionary = StandRules.combine(bun, sausage, 5)
+	_check(hot_dog["kind"] == "hot_dog" and not hot_dog["burnt"], "bun plus sausage is a hot dog")
+	var ketchup := StandRules.new_item("ketchup")
+	hot_dog = StandRules.combine(hot_dog, ketchup, 5)
+	_check(hot_dog["ketchup"], "ketchup added")
+	_check(str(StandRules.combine(hot_dog, ketchup, 5)) == "It already has ketchup.", "no double ketchup")
+	_check(str(StandRules.combine(bun, ketchup, 5)) == "Put the meat in first.", "sauce needs meat")
+	_check(StandRules.describe(hot_dog, 5) == "hot dog with ketchup", "describe: %s" % StandRules.describe(hot_dog, 5))
+	var patty := StandRules.new_item("patty")
+	patty["cook"] = 500.0
+	_check(StandRules.cook_state(patty, 5) == "burnt", "burns")
+	var burger: Dictionary = StandRules.combine(bun, patty, 5)
+	_check(burger["kind"] == "burger" and burger["burnt"], "burnt burger")
+	_check(str(StandRules.combine(sausage, bun, 5)) == "", "roll onto sausage does nothing")
+
+	var order := {"food": "hot_dog", "ketchup": true, "mustard": false, "can": true}
+	_check(StandRules.give_problem(order, hot_dog, false, false) == "", "right hot dog")
+	_check(StandRules.give_problem(order, burger, false, false) == "This is burnt!", "burnt refused")
+	burger["burnt"] = false
+	_check(StandRules.give_problem(order, burger, false, false) == "I wanted a hot dog.", "wrong food")
+	_check(StandRules.give_problem(order, hot_dog, true, false) == "I already have my food.", "no second food")
+	var can := StandRules.new_item("can")
+	_check(StandRules.give_problem(order, can, true, false) == "", "can accepted")
+	order["can"] = false
+	_check(StandRules.give_problem(order, can, true, false) == "I didn't ask for a can.", "unwanted can")
+	_check(StandRules.price({"food": "burger", "ketchup": false, "mustard": false, "can": true}) == GameData.BURGER_PRICE + GameData.CAN_PRICE, "burger price")
+	_check(StandRules.tip(1.0, 8) > StandRules.tip(0.2, 8), "faster serving tips more")
+	_check(StandRules.tip(0.0, 20) == 0, "no tip at the last second")
+	_check(StandRules.spawn_interval(1, 1.0) < StandRules.spawn_interval(5, 1.0), "noon busier than the dead shift")
+	_check(StandRules.eat_effect(StandRules.new_item("sausage"), 5).size() == 1, "raw meat is not eaten")
+	_check(float(StandRules.eat_effect(hot_dog, 5)["hunger"]) < 0.0, "hot dogs feed you")
+	_check(StandRules.order_text({"food": "burger", "ketchup": false, "mustard": true, "can": true}) == "Burger: mustard\n+ a can", "order text")
 
 
 func _test_damaged_file() -> void:

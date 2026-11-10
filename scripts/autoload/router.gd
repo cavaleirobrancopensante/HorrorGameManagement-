@@ -16,6 +16,7 @@ const KEYS := {
 	"interact": [KEY_E],
 	"flashlight": [KEY_F],
 	"plan_day": [KEY_C],
+	"use_hand": [KEY_Q],
 }
 
 

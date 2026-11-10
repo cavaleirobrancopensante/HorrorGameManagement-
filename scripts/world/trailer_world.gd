@@ -28,6 +28,11 @@ const NIGHT_FOG := Color("#120d19")
 const DAY_FOG := Color("#6f7178")
 
 var mirror: Mirror
+## Places on the grill and counters where food can sit.
+var grill_spots: Array[FoodSpot] = []
+var counter_spots: Array[FoodSpot] = []
+var ketchup_spot: FoodSpot
+var mustard_spot: FoodSpot
 var cameras: Array[SecurityCamera] = []
 
 var _environment: Environment
@@ -328,20 +333,53 @@ func _build_kitchen() -> void:
 	# Serving counter under the hatch.
 	_span(Vector3(0.3, 0.0, 2.62), Vector3(3.3, 0.9, WIDTH), steel)
 	_span(Vector3(0.28, 0.9, 2.58), Vector3(3.32, 0.95, WIDTH), steel, false)
-	for x in [1.05, 1.8, 2.55]:
+	for x in [1.05, 2.15, 2.55]:
 		_span(Vector3(x - 0.01, 0.08, 2.605), Vector3(x + 0.01, 0.84, 2.62), dark, false)
-	# Griddle.
+	# Griddle with four places to cook.
 	_span(Vector3(1.25, 0.95, 2.68), Vector3(2.05, 1.0, 3.12), dark, false)
 	_span(Vector3(1.28, 1.0, 2.71), Vector3(2.02, 1.006, 3.09), _c("#1b1a1c"), false)
-	_zone(Vector3(1.25, 0.9, 2.62), Vector3(2.05, 1.06, 3.15), "grill")
-	# Bun bin, sauces, register.
-	_span(Vector3(0.45, 0.95, 2.72), Vector3(0.95, 1.1, 3.1), _m("wood_light"), false)
-	for i in 4:
-		_span(Vector3(0.5 + i * 0.11, 1.1, 2.82), Vector3(0.59 + i * 0.11, 1.15, 2.95), _c("#c48c4c"), false)
-	_cyl(0.035, 0.2, Vector3(2.25, 1.05, 2.9), _c("#b3262c"))
-	_cyl(0.035, 0.2, Vector3(2.37, 1.05, 2.9), _c("#d1a22a"))
+	for at in [Vector3(1.45, 1.006, 2.8), Vector3(1.85, 1.006, 2.8), Vector3(1.45, 1.006, 3.0), Vector3(1.85, 1.006, 3.0)]:
+		var spot := FoodSpot.create(at, 0.36, 0.18, true)
+		add_child(spot)
+		grill_spots.append(spot)
+	# Fridge drawers for sausages and patties, under the griddle.
+	for drawer: Array in [[1.27, 1.63, "take_sausage", "SAUSAGES"], [1.67, 2.03, "take_patty", "PATTIES"]]:
+		_span(Vector3(drawer[0], 0.4, 2.6), Vector3(drawer[1], 0.85, 2.62), _m("steel"), false)
+		_span(Vector3(drawer[0] + 0.08, 0.76, 2.585), Vector3(drawer[1] - 0.08, 0.79, 2.6), dark, false)
+		var tag := Label3D.new()
+		tag.text = drawer[3]
+		tag.font = UiKit.body_font()
+		tag.font_size = 32
+		tag.pixel_size = 0.0011
+		tag.modulate = Color("#2a2226")
+		tag.outline_size = 0
+		tag.shaded = true
+		tag.position = Vector3((drawer[0] + drawer[1]) / 2.0, 0.62, 2.598)
+		tag.rotation_degrees.y = 180.0
+		add_child(tag)
+		_zone(Vector3(drawer[0], 0.35, 2.5), Vector3(drawer[1], 0.88, 2.6), drawer[2])
+	# Bread roll bin.
+	_span(Vector3(0.4, 0.95, 2.72), Vector3(0.82, 1.1, 3.1), _m("wood_light"), false)
+	for i in 3:
+		_span(Vector3(0.45 + i * 0.12, 1.1, 2.82), Vector3(0.54 + i * 0.12, 1.15, 2.95), _c("#c48c4c"), false)
+	_zone(Vector3(0.4, 0.95, 2.68), Vector3(0.82, 1.18, 3.12), "take_bun")
+	# Places to set things down on the serving counter; the sauces start here.
+	for at in [Vector3(1.03, 0.95, 2.86), Vector3(2.22, 0.95, 2.86), Vector3(2.42, 0.95, 2.86)]:
+		var spot := FoodSpot.create(at, 0.2 if at.x > 2.0 else 0.38, 0.3, false)
+		add_child(spot)
+		counter_spots.append(spot)
+	ketchup_spot = counter_spots[1]
+	mustard_spot = counter_spots[2]
+	# Till.
 	_span(Vector3(2.6, 0.95, 2.72), Vector3(3.05, 1.1, 3.08), _c("#2a2a2e"), false)
 	_box(Vector3(0.3, 0.13, 0.02), Vector3(2.82, 1.18, 2.84), _g("#3e8a63"), false, Vector3(-30.0, 0.0, 0.0))
+	# Lever that opens and closes the hatch shutter.
+	_span(Vector3(3.15, 1.25, WIDTH - 0.04), Vector3(3.3, 1.6, WIDTH - 0.01), _c("#2b2b30"), false)
+	_box(Vector3(0.03, 0.18, 0.03), Vector3(3.22, 1.5, WIDTH - 0.07), _c("#a3302c"), false, Vector3(25.0, 0.0, 0.0))
+	_zone(Vector3(3.1, 1.2, WIDTH - 0.15), Vector3(3.35, 1.65, WIDTH), "hatch")
+	# Kitchen bin.
+	_cyl(0.18, 0.6, Vector3(3.15, 0.3, 0.95), _c("#26352b"))
+	_zone(Vector3(2.95, 0.0, 0.75), Vector3(3.35, 0.62, 1.15), "bin")
 
 	# Prep counter, kettle and fryer along the back wall.
 	_span(Vector3(0.3, 0.0, 0.0), Vector3(2.3, 0.9, 0.62), steel)
@@ -350,6 +388,11 @@ func _build_kitchen() -> void:
 	_cyl(0.035, 0.08, Vector3(0.95, 0.99, 0.35), _c("#a8382f"))
 	_cyl(0.035, 0.08, Vector3(1.05, 0.99, 0.25), _c("#d8d2c0"))
 	_zone(Vector3(0.5, 0.9, 0.08), Vector3(1.15, 1.22, 0.58), "coffee")
+	_span(Vector3(1.18, 0.95, 0.12), Vector3(2.08, 0.965, 0.52), _m("wood_light"), false)
+	for x in [1.33, 1.63, 1.93]:
+		var spot := FoodSpot.create(Vector3(x, 0.965, 0.32), 0.28, 0.38, false)
+		add_child(spot)
+		counter_spots.append(spot)
 	_span(Vector3(1.4, 1.6, 0.0), Vector3(2.2, 1.63, 0.03), _c("#2b2b30"), false)
 	for i in 4:
 		var x := 1.5 + i * 0.18
@@ -579,7 +622,6 @@ func _build_outside() -> void:
 	_shutter.position = Vector3(1.75, 1.93, WIDTH + OUTER + 0.02)
 	add_child(_shutter)
 	_box(Vector3(2.6, 0.97, 0.03), Vector3(0.0, -0.485, 0.015), _m("skin"), false, Vector3.ZERO, _shutter)
-	_zone(Vector3(0.5, 1.0, WIDTH - 0.02), Vector3(3.0, 1.9, WIDTH + 0.1), "hatch")
 	_hatch_spill = _light(Vector3(1.75, 1.4, WIDTH + 0.8), "#ffd08a", 0.9, 3.6, false)
 	for i in 9:
 		var colour := "#8a2c33" if i % 2 == 0 else "#c7b995"
