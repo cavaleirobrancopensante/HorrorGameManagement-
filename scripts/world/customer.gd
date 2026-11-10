@@ -1,9 +1,8 @@
 class_name Customer
 extends Node3D
-## Someone who walks up to the hatch, waits with an order, then walks off.
-## Drawn with the same pixel figures as the player, in their own clothes.
-
-signal arrived
+## Someone who walks up to the hatch, waits with an order over their head,
+## and takes food handed through the hatch. Drawn with the same pixel figures
+## as the player, in their own clothes.
 
 const WALK_SPEED := 1.3
 const SHIRTS := ["#4a5a6e", "#6e3b33", "#3f5a43", "#5c5048", "#2f2f38", "#7a6a3a", "#4e3a5c"]
@@ -13,6 +12,8 @@ var patience := 0.0
 var max_patience := 1.0
 var at_hatch := false
 var leaving := false
+var has_food := false
+var has_can := false
 var _tween: Tween
 
 
@@ -47,6 +48,19 @@ static func create(look_rng: RandomNumberGenerator, wanted: Dictionary, wait_sec
 	sprite.pixel_size = Player.BODY_PIXEL_SIZE
 	sprite.position.y = 320.0 * Player.BODY_PIXEL_SIZE / 2.0
 	customer.add_child(sprite)
+
+	# What the player looks at to hand food over.
+	var reach := Interactable.new()
+	reach.id = "customer"
+	reach.set_meta("customer", customer)
+	reach.position.y = 1.35
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.5, 1.1, 0.3)
+	shape.shape = box
+	reach.add_child(shape)
+	customer.add_child(reach)
+
 	return customer
 
 
@@ -69,3 +83,27 @@ func leave(street: Vector3) -> void:
 
 func patience_left() -> float:
 	return patience / max_patience
+
+
+func is_complete() -> bool:
+	return has_food and (has_can or not order["can"])
+
+
+## The point the order bubble hangs from, above the head.
+func bubble_point() -> Vector3:
+	return global_position + Vector3(0.0, 2.0, 0.0)
+
+
+## The order, what has arrived and the time left, for the bubble.
+func bubble_text(charm: int) -> String:
+	var lines := StandRules.order_text(order)
+	if has_food:
+		lines = lines.replace(lines.get_slice("\n", 0), "Food: done")
+	if has_can:
+		lines = lines.replace("+ a can", "Can: done")
+	return "%s\n%d s, tip %d" % [lines, ceili(patience), StandRules.tip(patience_left(), charm)]
+
+
+func bubble_colour() -> Color:
+	var left := patience_left()
+	return UiKit.TALLOW if left > 0.5 else (UiKit.SODIUM if left > 0.25 else Color("#ff6a70"))

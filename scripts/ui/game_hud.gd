@@ -19,6 +19,10 @@ var _prompt := ""
 var _toast := ""
 var _toast_time := 0.0
 var _hint := ""
+var _holding := ""
+var _can_eat := false
+## Order bubbles over customers: [screen point, text, colour].
+var bubbles: Array = []
 
 
 func _ready() -> void:
@@ -37,6 +41,11 @@ func refresh() -> void:
 
 func set_prompt(text: String) -> void:
 	_prompt = text
+
+
+func set_holding(text: String, can_eat: bool) -> void:
+	_holding = text
+	_can_eat = can_eat
 
 
 func toast(text: String) -> void:
@@ -86,6 +95,9 @@ func _draw() -> void:
 	_text(font, Vector2(right - 340, 68), "%s, %s" % [Survival.shift_name(now), Survival.clock_text(now)], 22, UiKit.TALLOW, 340)
 	_text(font, Vector2(right - 340, 96), "%d credits" % Survival.money(save), 22, UiKit.LITURGICAL_GOLD, 340)
 
+	for bubble: Array in bubbles:
+		_bubble(font, bubble[0], bubble[1], bubble[2])
+
 	var center := size / 2.0
 	if _prompt.is_empty():
 		draw_rect(Rect2(center - Vector2(2, 2), Vector2(4, 4)), Color(UiKit.TALLOW, 0.6))
@@ -95,11 +107,37 @@ func _draw() -> void:
 		var hint := "" if touch_mode else "E  "
 		_text(font, Vector2(0, prompt_y), hint + _prompt, 28, UiKit.TALLOW, size.x, HORIZONTAL_ALIGNMENT_CENTER)
 
+	if not _holding.is_empty():
+		var eat := ""
+		if _can_eat:
+			eat = "   (Eat button)" if touch_mode else "   (Q to eat)"
+		var holding_y := size.y - (190.0 if touch_mode else 80.0)
+		_text(font, Vector2(0, holding_y), _holding + eat, 22, UiKit.LITURGICAL_GOLD, size.x, HORIZONTAL_ALIGNMENT_CENTER)
+	if not _holding.is_empty():
+		var eat := ""
+		if _can_eat:
+			eat = "   (Eat button)" if touch_mode else "   (Q to eat)"
+		var holding_y := size.y - (190.0 if touch_mode else 80.0)
+		_text(font, Vector2(0, holding_y), _holding + eat, 22, UiKit.LITURGICAL_GOLD, size.x, HORIZONTAL_ALIGNMENT_CENTER)
 	if _toast_time > 0.0:
 		var alpha := clampf(_toast_time, 0.0, 1.0)
 		_text(font, Vector2(0, 150), _toast, 26, Color(UiKit.TALLOW, alpha), size.x, HORIZONTAL_ALIGNMENT_CENTER)
 	if not _hint.is_empty():
 		_text(font, Vector2(0, size.y - 40), _hint, 22, UiKit.ASH, size.x, HORIZONTAL_ALIGNMENT_CENTER)
+
+
+func _bubble(font: Font, anchor: Vector2, text: String, colour: Color) -> void:
+	var lines := text.split("\n")
+	var width := 0.0
+	for line in lines:
+		width = maxf(width, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x)
+	var box := Rect2(anchor - Vector2(width / 2.0 + 10.0, lines.size() * 24.0 + 18.0), Vector2(width + 20.0, lines.size() * 24.0 + 10.0))
+	draw_rect(box, Color(UiKit.COMPLINE, 0.85))
+	draw_rect(box, Color(colour, 0.8), false, 2.0)
+	var tail := PackedVector2Array([anchor + Vector2(-7, -8), anchor + Vector2(7, -8), anchor])
+	draw_colored_polygon(tail, Color(colour, 0.8))
+	for i in lines.size():
+		draw_string(font, Vector2(box.position.x + 10.0, box.position.y + 24.0 + i * 24.0), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 20, colour if i == lines.size() - 1 else UiKit.TALLOW)
 
 
 func _text(font: Font, at: Vector2, text: String, font_size: int, colour: Color, width := -1.0, align := HORIZONTAL_ALIGNMENT_RIGHT) -> void:

@@ -10,12 +10,14 @@ signal stepped
 const SPEED := 2.6
 const EYE_HEIGHT := 1.55
 const GRAVITY := 12.0
-const REACH := 2.0
+const REACH := 2.4
 const BODY_PIXEL_SIZE := 0.0056
 
 var camera: Camera3D
 var flashlight: SpotLight3D
 var body_sprite: Sprite3D
+## Where held items sit, in front of the camera.
+var hand: Node3D
 var move_input := Vector2.ZERO
 var controls_enabled := true
 var focused: Interactable = null
@@ -42,6 +44,11 @@ func _init() -> void:
 	camera.far = 90.0
 	camera.cull_mask = 0xFFFFF & ~(TrailerWorld.LAYER_BODY | TrailerWorld.LAYER_CCTV_ONLY)
 	add_child(camera)
+
+	hand = Node3D.new()
+	hand.position = Vector3(0.2, -0.2, -0.42)
+	hand.rotation_degrees = Vector3(15.0, -20.0, 0.0)
+	camera.add_child(hand)
 
 	flashlight = SpotLight3D.new()
 	flashlight.spot_range = 14.0
