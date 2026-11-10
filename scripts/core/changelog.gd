@@ -5,6 +5,16 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.7.0", "date": "10 Nov 2026", "title": "Something outside",
+		"changes": [
+			"The horror director. Your soul's lean decides what comes: toward sin, the demonic; toward faith, the state; in between, a little of both. How far you lean, how stressed you are and how late it is decide how often and how bad. Night is worst. St. Brigid's is safe.",
+			"The demonic: whispers, three slow knocks at night, a shape on your street camera, the lights dying with something in the room, someone behind you in the mirror, a customer who smiles too wide, a watcher across the street that is gone once you have looked at it, a face in your face, and at the worst, a blow from something you cannot see.",
+			"The state: a Civic drone at your window, a 'faith-affiliated' surcharge, your camera feeds seized for a shift, a hygiene inspector who fines you (more for a filthy counter) and shuts your hatch, the man in the grey coat across the street, and at night, an enforcement raid that takes your candles and half your meat.",
+			"Health matters now: the worst of it can hurt you, and dead is dead.",
+			"New sounds: knocks, a scare, the Civic drone and a siren.",
+		],
+	},
+	{
 		"version": "0.6.0", "date": "10 Nov 2026", "title": "A smoother kitchen",
 		"changes": [
 			"Put anything down anywhere: look at a counter, a shelf or the floor and press use. Two rolls fit side by side on the prep board.",

@@ -41,6 +41,10 @@ state of grace; the Saturday evening vigil counts.
 - **Confession** every evening and on Saturday afternoon. A full confession restores the state of grace; holding back a grave sin makes it a bad confession.
 - Faithfulness draws the state: a watcher in the church, fines on the way home.
 
+## The horror
+
+A director in `scripts/core/horror.gd` rolls every 20 game minutes. The soul's lean picks the side (sin: the demonic; faith: the state; in between, both); the lean, stress and night set the strength. Events need a minimum strength, some only at night, by day, near the mirror or with customers at the hatch, and each has a cooldown. The church is safe. `scripts/world/horror_director.gd` stages them: shapes seen only in the mirror (render layer 32) or only on the cameras, blackouts, the jumpscare face, the drone, the inspector and the raid.
+
 ## Patch notes
 
 The version is on the main menu; press it for every patch's changes. They live in `scripts/core/changelog.gd`, and its first entry must match `config/version` in `project.godot`.

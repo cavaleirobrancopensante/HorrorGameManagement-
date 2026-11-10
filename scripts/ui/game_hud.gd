@@ -59,6 +59,13 @@ func toast(text: String) -> void:
 	_toast_time = TOAST_SECONDS
 
 
+## A quick wash of colour over the screen that fades: a blow, a scare.
+func flash(colour: Color) -> void:
+	fade.color = colour
+	var tween := create_tween()
+	tween.tween_property(fade, "color:a", 0.0, 0.6)
+
+
 func show_hint(text: String) -> void:
 	_hint = text
 

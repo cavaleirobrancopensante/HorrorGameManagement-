@@ -21,6 +21,8 @@ const LAYER_CCTV_ONLY := 4
 const LAYER_MIRROR := 8
 ## Your own arm: seen only by your own eyes.
 const LAYER_VIEWMODEL := 16
+## Seen only in the mirror, never by your own eyes or the cameras.
+const LAYER_REFLECTION := 32
 
 const NIGHT_SKY := Color("#07050b")
 const DAY_SKY := Color("#7d8088")
@@ -43,6 +45,7 @@ var _interior_lights: Array[OmniLight3D] = []
 var _lamp_meshes: Array[Node3D] = []
 var _bathroom_light: OmniLight3D
 var _griddle: MeshInstance3D
+var _blacked_out := false
 var _upgrades := {}
 var _tv_screen: MeshInstance3D
 var _tv_light: OmniLight3D
@@ -336,7 +339,7 @@ func set_daylight(amount: float) -> void:
 	_daylight = amount
 	_environment.background_color = NIGHT_SKY.lerp(DAY_SKY, amount)
 	_environment.ambient_light_color = NIGHT_AMBIENT.lerp(DAY_AMBIENT, amount)
-	_environment.ambient_light_energy = lerpf(0.55, 1.0, amount)
+	_environment.ambient_light_energy = 0.04 if _blacked_out else lerpf(0.55, 1.0, amount)
 	_environment.fog_light_color = NIGHT_FOG.lerp(DAY_FOG, amount)
 	var lamps_on := amount < 0.6
 	_street_light.visible = lamps_on
@@ -890,6 +893,14 @@ func flicker() -> void:
 		_flicker.tween_callback(_set_power.bind(step[0]))
 		_flicker.tween_interval(step[1])
 	Sound.play("buzz", 0.1, -8.0)
+
+
+## The power dies completely, or comes back.
+func blackout(on: bool) -> void:
+	_blacked_out = on
+	_set_power(0.0 if on else 1.0)
+	if on:
+		_environment.ambient_light_energy = 0.04
 
 
 func _set_power(level: float) -> void:

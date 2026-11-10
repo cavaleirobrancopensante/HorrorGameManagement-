@@ -32,6 +32,8 @@ func _initialize() -> void:
 	_test_communion()
 	_test_temptation()
 	_test_changelog()
+	_test_horror()
+	_test_scripts_compile()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -579,3 +581,80 @@ func _test_changelog() -> void:
 		_check(not seen.has(patch["version"]), "patch versions unique")
 		seen[patch["version"]] = true
 		_check((patch["changes"] as Array).size() > 0, "patch %s lists changes" % patch["version"])
+
+
+func _test_horror() -> void:
+	var save := _new_save()
+	_check(save["horror"] is Dictionary, "saves carry horror state")
+	# Calm, faithful-neutral, daytime: weak.
+	save["soul"]["horror_lean"] = 0
+	save["survival"]["stress"] = 0.0
+	save["world"]["time"] = Survival.now(save) - fmod(Survival.now(save), Survival.DAY) + 12 * 60.0
+	var calm := Horror.intensity(save)
+	_check(calm < 0.1, "calm noon is quiet: %f" % calm)
+	# Leaning far toward sin, stressed, at night: strong, and demonic.
+	save["soul"]["horror_lean"] = 45
+	save["survival"]["stress"] = 80.0
+	save["world"]["time"] = float(save["world"]["time"]) + 14 * 60.0
+	_check(Horror.is_night(Survival.now(save)), "2am is night")
+	_check(Horror.intensity(save) > 0.8, "sin, stress and night: strong")
+	_check(Horror.demonic_weight(save) > 0.9, "sin brings the demonic")
+	_check(Horror.chance(save) > Horror.CHANCE_MIN * 4.0, "strong horror comes often")
+	save["soul"]["horror_lean"] = -45
+	_check(Horror.demonic_weight(save) < 0.1, "faithfulness brings the state")
+	save["soul"]["horror_lean"] = 0
+	_check(is_equal_approx(Horror.demonic_weight(save), 0.5), "in between, both")
+	# Rules for when events can happen.
+	save["soul"]["horror_lean"] = 45
+	var context := {"in_church": false, "near_mirror": false, "hatch_open": false, "customers": false}
+	_check(not Horror.available(save, Horror.def("mirror"), context), "mirror needs the mirror")
+	context["near_mirror"] = true
+	_check(Horror.available(save, Horror.def("mirror"), context), "near the mirror")
+	_check(not Horror.available(save, Horror.def("smile"), context), "a smiling customer needs customers")
+	_check(not Horror.available(save, Horror.def("inspector"), context), "no inspector at night")
+	context["in_church"] = true
+	_check(not Horror.available(save, Horror.def("whisper"), context), "nothing follows you into the church")
+	_check(Horror.roll(save, _rng(1), context).is_empty(), "the church is safe")
+	context["in_church"] = false
+	# Cooldowns.
+	Horror.apply(save, Horror.def("whisper"))
+	_check(not Horror.available(save, Horror.def("whisper"), context), "whisper cools down")
+	Survival.advance(save, 4 * 60.0)
+	_check(Horror.available(save, Horror.def("whisper"), context), "whisper can come back")
+	# Rolls happen when strong.
+	var rng := _rng(5)
+	var happened := 0
+	for i in 200:
+		if not Horror.roll(save, rng, context).is_empty():
+			happened += 1
+	_check(happened > 10, "a strong director acts: %d" % happened)
+	# Effects.
+	var money := Survival.money(save)
+	Horror.apply(save, Horror.def("tax"))
+	_check(Survival.money(save) == money - 12, "the surcharge takes money")
+	Horror.apply(save, Horror.def("feeds_seized"))
+	_check(Horror.feeds_off(save), "feeds seized")
+	Survival.advance(save, Survival.SHIFT_MINUTES + 1.0)
+	_check(not Horror.feeds_off(save), "feeds back after the shift")
+	save["world"]["hatch_open"] = true
+	save["world"]["dirt"]["serving"] = 0.9
+	money = Survival.money(save)
+	var report := Horror.apply(save, Horror.def("inspector"))
+	_check(Survival.money(save) == money - 20 and not bool(save["world"]["hatch_open"]), "inspector fines more for filth and shuts the hatch")
+	_check(report.contains("counters"), "inspector mentions the counters")
+	save["world"]["stock"]["candles"] = 3
+	save["world"]["stock"]["sausages"] = 10
+	var health := Survival.health(save)
+	Horror.apply(save, Horror.def("raid"))
+	_check(Survival.stock(save, "candles") == 0 and Survival.stock(save, "sausages") == 5, "raid takes candles and half the meat")
+	_check(Survival.health(save) < health, "raid hurts")
+
+
+## Every script compiles, including the ones the tests never run.
+func _test_scripts_compile() -> void:
+	for folder in ["res://scripts/core", "res://scripts/world", "res://scripts/ui", "res://scripts/screens", "res://scripts/autoload"]:
+		for file in DirAccess.get_files_at(folder):
+			if not file.ends_with(".gd"):
+				continue
+			var script: GDScript = load(folder + "/" + file)
+			_check(script != null and script.can_instantiate(), "compiles: %s/%s" % [folder, file])

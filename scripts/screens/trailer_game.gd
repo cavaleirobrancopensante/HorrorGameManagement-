@@ -35,6 +35,8 @@ var _body_canvas: SubViewport
 var _body_look := ""
 ## Game minutes since the last roll for a temptation.
 var _tempt_minutes := 0.0
+## Stages the demonic and the state, from the state of your soul.
+var horror: HorrorDirector
 var _in_church := false
 
 
@@ -95,6 +97,9 @@ func _build() -> void:
 	add_child(stand)
 	stand.setup(self)
 	stand.message.connect(hud.toast)
+	horror = HorrorDirector.new()
+	add_child(horror)
+	horror.setup(self)
 	_set_busy(false)
 
 
@@ -175,6 +180,7 @@ func _process(delta: float) -> void:
 			_save_now()
 		_update_music(delta)
 		_check_temptation(delta * Survival.MINUTES_PER_SECOND)
+		horror.tick(delta, _busy, _in_church)
 		_flicker_wait -= delta
 		if _flicker_wait <= 0.0:
 			_flicker_wait = _rng.randf_range(45.0, 120.0)
@@ -662,7 +668,7 @@ func order_product(id: String) -> void:
 ## may be standing out there that is not there when you go and look.
 func set_feeds_live(on: bool) -> void:
 	for unit in world.cameras:
-		unit.set_live(on)
+		unit.set_live(on and not Horror.feeds_off(save))
 	var hour := Survival.hour_of(Survival.now(save))
 	world.set_figure_visible(on and (hour >= 21 or hour < 5) and _rng.randf() < 0.45)
 
