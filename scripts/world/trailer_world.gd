@@ -28,6 +28,8 @@ const NIGHT_FOG := Color("#120d19")
 const DAY_FOG := Color("#6f7178")
 
 var mirror: Mirror
+## Fixed view from behind the serving counter, out through the hatch.
+var counter_camera: Camera3D
 var cameras: Array[SecurityCamera] = []
 
 var _environment: Environment
@@ -334,6 +336,12 @@ func _build_kitchen() -> void:
 	_span(Vector3(1.25, 0.95, 2.68), Vector3(2.05, 1.0, 3.12), dark, false)
 	_span(Vector3(1.28, 1.0, 2.71), Vector3(2.02, 1.006, 3.09), _c("#1b1a1c"), false)
 	_zone(Vector3(1.25, 0.9, 2.62), Vector3(2.05, 1.06, 3.15), "grill")
+	counter_camera = Camera3D.new()
+	counter_camera.fov = 70.0
+	counter_camera.near = 0.05
+	counter_camera.cull_mask = 0xFFFFF & ~(LAYER_BODY | LAYER_CCTV_ONLY)
+	counter_camera.transform = Transform3D(Basis.looking_at(Vector3(0.0, -0.12, 1.0), Vector3.UP), Vector3(1.75, 1.5, 2.15))
+	add_child(counter_camera)
 	# Bun bin, sauces, register.
 	_span(Vector3(0.45, 0.95, 2.72), Vector3(0.95, 1.1, 3.1), _m("wood_light"), false)
 	for i in 4:

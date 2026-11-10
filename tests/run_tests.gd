@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_test_calendar()
 	_test_shifts()
 	_test_mass()
+	_test_stand_rules()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -274,6 +275,25 @@ func _test_mass() -> void:
 	_check(not bool(lazy["soul"]["state_of_grace"]), "missing Mass loses grace")
 	_check(Survival.take_notices(lazy).size() == 1, "missed Mass notice")
 	_check(Survival.take_notices(lazy).is_empty(), "notices are taken once")
+
+
+func _test_stand_rules() -> void:
+	var order := {"ketchup": true, "mustard": false, "can": true}
+	var tray := StandRules.empty_tray()
+	_check(StandRules.problem(order, tray) != "", "empty tray is wrong")
+	tray["bun"] = true
+	tray["sausage"] = true
+	tray["ketchup"] = true
+	_check(StandRules.problem(order, tray) == "I wanted a can.", "missing can")
+	tray["can"] = true
+	_check(StandRules.problem(order, tray) == "", "right order")
+	tray["mustard"] = true
+	_check(StandRules.problem(order, tray) == "That's not what I asked for.", "extra mustard")
+	_check(StandRules.price(order) == GameData.HOT_DOG_PRICE + GameData.CAN_PRICE, "price with can")
+	_check(StandRules.tip(1.0, 8) > StandRules.tip(0.2, 8), "faster serving tips more")
+	_check(StandRules.tip(0.0, 20) == 0, "no tip at the last second")
+	_check(StandRules.spawn_interval(1, 1.0) < StandRules.spawn_interval(5, 1.0), "noon busier than the dead shift")
+	_check(StandRules.order_text({"ketchup": false, "mustard": false, "can": false}) == "Plain hot dog", "plain order text")
 
 
 func _test_damaged_file() -> void:

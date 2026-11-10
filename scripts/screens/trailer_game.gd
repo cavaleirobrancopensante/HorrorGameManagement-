@@ -12,6 +12,8 @@ var world: TrailerWorld
 var player: Player
 var hud: GameHud
 var touch: TouchControls
+var stand: Stand
+var character: PlayerCharacter
 
 var _touch_mode := false
 var _paused := false
@@ -23,7 +25,6 @@ var _flicker_wait := 50.0
 var _arrived := 0
 var _day := 0
 var _shift := -1
-var _character: PlayerCharacter
 var _rng := RandomNumberGenerator.new()
 
 
@@ -33,7 +34,7 @@ func _ready() -> void:
 		return
 	save = Saves.current
 	Survival.ensure(save)
-	_character = Saves.current_character()
+	character = Saves.current_character()
 	_rng.randomize()
 	_touch_mode = DisplayServer.is_touchscreen_available()
 	Sound.play_music("hum")
@@ -59,6 +60,7 @@ func _build() -> void:
 	world.build()
 	player = Player.new()
 	viewport.add_child(player)
+	player.camera.make_current()
 	world.mirror.viewer = player.camera
 	player.body_sprite.texture = _make_body_texture()
 	player.stepped.connect(func() -> void: Sound.play("step", 0.12, -8.0))
@@ -74,6 +76,10 @@ func _build() -> void:
 	touch.light_pressed.connect(_toggle_light)
 	touch.pause_pressed.connect(go_back)
 	touch.plan_pressed.connect(_open_planner)
+	stand = Stand.new()
+	add_child(stand)
+	stand.setup(self)
+	stand.message.connect(hud.toast)
 	_set_busy(false)
 
 
@@ -122,6 +128,7 @@ func _process(delta: float) -> void:
 		if not cause.is_empty():
 			_die(cause)
 			return
+		stand.tick(delta)
 		_check_arrivals()
 		_update_day()
 		_update_shift()
@@ -284,7 +291,7 @@ func _prompt_for(target: Interactable) -> String:
 		"shelves":
 			return "Check the stock"
 		"grill":
-			return "Grill"
+			return "Work the counter"
 		"hatch":
 			return "Close the hatch" if bool(save["world"]["hatch_open"]) else "Open the hatch"
 		"delivery":
@@ -332,7 +339,7 @@ func _interact() -> void:
 		"shelves":
 			_show_stock()
 		"grill":
-			hud.toast("The grill is cold. Cooking and customers come in the next build.")
+			_open_counter()
 		"hatch":
 			var open := not bool(save["world"]["hatch_open"])
 			save["world"]["hatch_open"] = open
@@ -429,6 +436,21 @@ func _sleep() -> void:
 
 # Shifts -----------------------------------------------------------------------
 
+func _open_counter() -> void:
+	if not bool(save["world"]["hatch_open"]):
+		save["world"]["hatch_open"] = true
+		world.set_hatch_open(true, true)
+		Sound.play("door", 0.1)
+	_set_busy(true)
+	world.counter_camera.make_current()
+	CounterPanel.open(self)
+
+
+func on_counter_closed() -> void:
+	player.camera.make_current()
+	_set_busy(false)
+
+
 func _open_planner() -> void:
 	if _busy or _dead or _paused:
 		return
@@ -452,10 +474,11 @@ func spend_shift(id: String) -> void:
 	var tween := create_tween()
 	tween.tween_property(hud.fade, "color:a", 1.0, 0.7)
 	await tween.finished
+	stand.clear()
 	if id == "work":
 		save["world"]["hatch_open"] = true
 		world.set_hatch_open(true, false)
-	var result := Survival.spend_shift(save, id, _character, _rng)
+	var result := Survival.spend_shift(save, id, character, _rng)
 	if not str(result["cause"]).is_empty():
 		_die(result["cause"])
 		return
