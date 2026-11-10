@@ -18,7 +18,7 @@ const TITLES := {
 	"outside": "Something Outside", "sunday": "Sunday", "requiem": "Requiem",
 }
 const AMBIENCE := {"hum": "res://assets/audio/room_hum.ogg"}
-const EFFECTS := ["click", "bell", "step", "door", "beep", "drone", "buzz", "water", "can", "till", "tempt", "knock", "scare", "civic_drone", "siren"]
+const EFFECTS := ["click", "bell", "step", "door", "beep", "drone", "buzz", "water", "can", "till", "tempt", "knock", "scare", "civic_drone", "siren", "glass"]
 const FILES := {"click": "ui_click"}
 const POOL_SIZE := 6
 const MUSIC_DB := -4.0

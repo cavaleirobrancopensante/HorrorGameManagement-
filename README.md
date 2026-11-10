@@ -45,6 +45,21 @@ state of grace; the Saturday evening vigil counts.
 
 A director in `scripts/core/horror.gd` rolls every 20 game minutes. The soul's lean picks the side (sin: the demonic; faith: the state; in between, both); the lean, stress and night set the strength. Events need a minimum strength, some only at night, by day, near the mirror or with customers at the hatch, and each has a cooldown. The church is safe. `scripts/world/horror_director.gd` stages them: shapes seen only in the mirror (render layer 32) or only on the cameras, blackouts, the jumpscare face, the drone, the inspector and the raid.
 
+### Pacing
+
+Small scares build dread; a big scare (blackout, mirror, face, blow, raid, the waking) needs at least two since the last one, then a calm of random length follows (about 1 to 2 days at full strength, longer when calmer). The face is two to five days apart. Simulated over 30 game days (one game day is 24 real minutes):
+
+| Soul | Faces | Big scares | Small a day |
+| --- | --- | --- | --- |
+| Far toward sin, very stressed | about 4 | about 22 | about 5 |
+| Somewhat toward sin | about 4 | about 14 | about 4 |
+| Far toward faith | none | about 12 (state) | about 5 |
+| Balanced and calm | none | none | about 2 |
+
+### The night
+
+Close the window shutter before you sleep. Burglars come more for cash, mostly give up at a closed shutter, and can be fought (Endurance, Vigilance) or let be. Leaning toward sin, you may wake unable to move.
+
 ## Patch notes
 
 The version is on the main menu; press it for every patch's changes. They live in `scripts/core/changelog.gd`, and its first entry must match `config/version` in `project.godot`.

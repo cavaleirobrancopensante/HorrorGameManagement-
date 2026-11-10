@@ -50,12 +50,13 @@ func context(in_church: bool) -> Dictionary:
 		"near_mirror": at.x > 9.0 and at.distance_to(Vector3(MIRROR.x, at.y, MIRROR.z)) < 2.2,
 		"hatch_open": bool(game.save["world"]["hatch_open"]),
 		"customers": customers,
+		"shutters_closed": bool(game.save["world"]["shutters_closed"]),
 	}
 
 
 ## Plays an event: its effect on you, then the scene.
 func run(event: Dictionary) -> void:
-	var text := Horror.apply(game.save, event)
+	var text := Horror.apply(game.save, event, game.character.stat_value("nerve"), _rng)
 	match event["id"]:
 		"whisper", "smile":
 			Sound.play("tempt", 0.08, -4.0)
@@ -141,9 +142,11 @@ func _shape(at: Vector3, layers: int, seconds: float) -> Sprite3D:
 	shape.layers = layers
 	game.world.add_child(shape)
 	shape.global_position = at + Vector3(0.0, 104.0 * 0.019 / 2.0, 0.0)
+	var ref: WeakRef = weakref(shape)
 	get_tree().create_timer(seconds).timeout.connect(func() -> void:
-		if is_instance_valid(shape):
-			shape.queue_free()
+		var still: Object = ref.get_ref()
+		if still != null:
+			still.queue_free()
 	)
 	return shape
 

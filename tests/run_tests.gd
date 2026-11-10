@@ -34,6 +34,8 @@ func _initialize() -> void:
 	_test_changelog()
 	_test_horror()
 	_test_scripts_compile()
+	_test_scare_pacing()
+	_test_night()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -609,6 +611,8 @@ func _test_horror() -> void:
 	var context := {"in_church": false, "near_mirror": false, "hatch_open": false, "customers": false}
 	_check(not Horror.available(save, Horror.def("mirror"), context), "mirror needs the mirror")
 	context["near_mirror"] = true
+	save["horror"]["dread"] = Horror.DREAD_NEEDED
+	save["world"]["time"] = float(save["world"]["time"]) + Survival.DAY
 	_check(Horror.available(save, Horror.def("mirror"), context), "near the mirror")
 	_check(not Horror.available(save, Horror.def("smile"), context), "a smiling customer needs customers")
 	_check(not Horror.available(save, Horror.def("inspector"), context), "no inspector at night")
@@ -658,3 +662,115 @@ func _test_scripts_compile() -> void:
 				continue
 			var script: GDScript = load(folder + "/" + file)
 			_check(script != null and script.can_instantiate(), "compiles: %s/%s" % [folder, file])
+
+
+## Big scares grow out of small ones, are spread out, and are not regular.
+func _test_scare_pacing() -> void:
+	var save := _new_save()
+	var context := {"in_church": false, "near_mirror": true, "hatch_open": false, "customers": false, "shutters_closed": false}
+	_check(not Horror.big_ready(save), "nothing big on the first day")
+	# Worst case: far toward sin, stressed, play through 30 days.
+	var rng := _rng(11)
+	var faces: Array = []
+	var bigs: Array = []
+	var smalls := 0
+	for step in int(30 * Survival.DAY / Horror.ROLL_MINUTES):
+		save["soul"]["horror_lean"] = 50
+		save["survival"]["stress"] = 85.0
+		Survival.advance(save, Horror.ROLL_MINUTES)
+		save["survival"]["health"] = 100.0
+		save["survival"]["hunger"] = 0.0
+		save["survival"]["thirst"] = 0.0
+		save["survival"]["tiredness"] = 0.0
+		var event := Horror.roll(save, rng, context)
+		if event.is_empty():
+			continue
+		Horror.apply(save, event, 0, rng)
+		if event["id"] == "jumpscare":
+			faces.append(Survival.now(save))
+		if event.get("big", false):
+			bigs.append(Survival.now(save))
+		else:
+			smalls += 1
+	print("pacing: faces %d, big %d, small %d" % [faces.size(), bigs.size(), smalls])
+	_check(faces.size() >= 3 and faces.size() <= 15, "faces over 30 worst-case days: %d" % faces.size())
+	_check(bigs.size() <= 30, "at most about one big scare a day: %d" % bigs.size())
+	_check(smalls > bigs.size() * 2, "small scares outnumber big ones: %d to %d" % [smalls, bigs.size()])
+	var gaps: Array = []
+	for i in range(1, faces.size()):
+		var gap: float = (faces[i] - faces[i - 1]) / Survival.DAY
+		gaps.append(gap)
+		_check(gap >= 1.7, "faces at least ~2 days apart: %.2f" % gap)
+	if gaps.size() >= 2:
+		_check(absf(gaps.max() - gaps.min()) > 0.5, "faces are not on a schedule")
+	# A calm soul in daylight barely sees anything.
+	var calm := _new_save()
+	var quiet := 0
+	for step in int(10 * Survival.DAY / Horror.ROLL_MINUTES):
+		Survival.advance(calm, Horror.ROLL_MINUTES)
+		calm["survival"]["health"] = 100.0
+		calm["survival"]["hunger"] = 0.0
+		calm["survival"]["thirst"] = 0.0
+		calm["survival"]["tiredness"] = 0.0
+		calm["survival"]["stress"] = 0.0
+		calm["soul"]["horror_lean"] = 0
+		var event := Horror.roll(calm, rng, context)
+		if not event.is_empty():
+			Horror.apply(calm, event, 0, rng)
+			if event.get("big", false):
+				quiet += 1
+	_check(quiet == 0, "no big scares for a calm, balanced soul: %d" % quiet)
+	_check(Horror.scare_stress({"stress": 20.0}, 10) < Horror.scare_stress({"stress": 20.0}, 0), "nerve softens scares")
+
+
+func _test_night() -> void:
+	var save := _new_save()
+	save["survival"]["money"] = 200
+	_check(Horror.burglar_chance(save, true) < Horror.burglar_chance(save, false) * 0.5, "shutters keep most burglars out")
+	save["survival"]["money"] = 0
+	var poor := Horror.burglar_chance(save, false)
+	save["survival"]["money"] = 300
+	_check(Horror.burglar_chance(save, false) > poor, "cash draws burglars")
+	_check(Horror.fight_chance(10, 10) > Horror.fight_chance(1, 1), "endurance and vigilance help in a fight")
+	# Letting him take it costs money but not health.
+	var health := Survival.health(save)
+	Horror.let_burglar(save, _rng(2))
+	_check(Survival.money(save) < 300 and Survival.health(save) == health, "doing nothing costs money")
+	# Fights: sometimes won, sometimes lost and hurt.
+	var won := 0
+	var hurt := 0
+	for i in 60:
+		var s := _new_save()
+		s["survival"]["money"] = 100
+		var result := Horror.fight_burglar(s, 5, 5, _rng(100 + i))
+		if result["won"]:
+			won += 1
+			_check(Survival.money(s) == 100, "winning keeps your money")
+		elif Survival.health(s) < Survival.max_health(s) - 15.0:
+			hurt += 1
+	_check(won > 10 and hurt > 10, "fights go both ways: won %d, hurt %d" % [won, hurt])
+	# Burglars do not come every night.
+	var nights := _new_save()
+	nights["survival"]["money"] = 150
+	var rng := _rng(9)
+	var burglaries := 0
+	for night in 60:
+		var result := Horror.night(nights, rng, false, 480.0)
+		if result.get("id", "") == "burglar":
+			burglaries += 1
+		Survival.advance(nights, Survival.DAY)
+		nights["survival"]["health"] = 100.0
+		nights["survival"]["hunger"] = 0.0
+		nights["survival"]["thirst"] = 0.0
+		nights["survival"]["tiredness"] = 0.0
+	_check(burglaries >= 2 and burglaries <= 16, "burglaries over 60 nights: %d" % burglaries)
+	# The waking only comes to those leaning toward sin.
+	var faithful := _new_save()
+	faithful["soul"]["horror_lean"] = -40
+	Survival.advance(faithful, 2 * Survival.DAY)
+	faithful["horror"]["dread"] = 5
+	var wakings := 0
+	for i in 50:
+		if Horror.night(faithful, rng, true, 480.0).get("id", "") == "paralysis":
+			wakings += 1
+	_check(wakings == 0, "no demonic waking for the faithful")

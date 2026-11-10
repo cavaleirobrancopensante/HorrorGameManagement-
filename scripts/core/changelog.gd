@@ -5,6 +5,17 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.8.0", "date": "10 Nov 2026", "title": "The night",
+		"changes": [
+			"A roller shutter on the home window. Closed, nothing can watch you through it, and most burglars give up at it: you find pry marks in the morning.",
+			"Burglars: some nights glass breaks and a man climbs in for your cash. Fight him (Endurance and Vigilance help, and losing hurts) or lie still and let him take it. More cash in the tin draws more of them.",
+			"The waking: leaning toward sin, you may wake unable to move while something comes closer from the foot of the bed.",
+			"Scare pacing. Small scares build dread; big ones only come after at least two small ones, and after each there is a calm of random length. The face is rarer still, days apart, and never on a schedule. Nothing big on the first day.",
+			"Each kind of horror follows its own side of your soul: the faithful get no faces, only the faintest of the demonic. Raids are now big events, at most every four days.",
+			"Fewer small events overall. Nerve softens scares.",
+		],
+	},
+	{
 		"version": "0.7.0", "date": "10 Nov 2026", "title": "Something outside",
 		"changes": [
 			"The horror director. Your soul's lean decides what comes: toward sin, the demonic; toward faith, the state; in between, a little of both. How far you lean, how stressed you are and how late it is decide how often and how bad. Night is worst. St. Brigid's is safe.",

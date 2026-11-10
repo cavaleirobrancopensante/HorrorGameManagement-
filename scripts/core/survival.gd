@@ -33,6 +33,8 @@ static func ensure(save: Dictionary) -> void:
 		world["upgrades"] = {}
 	if not (world.get("dirt") is Dictionary):
 		world["dirt"] = {}
+	if not world.has("shutters_closed"):
+		world["shutters_closed"] = false
 	if not (world.get("learned") is Dictionary):
 		world["learned"] = {}
 	if not (world.get("bottles") is Dictionary):

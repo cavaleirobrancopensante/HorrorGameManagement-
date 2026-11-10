@@ -5,10 +5,12 @@ extends Control
 ## unless a cancel action is given.
 
 var _on_cancel := Callable()
+var _shade := 0.8
 
 
-static func ask(parent: Node, title: String, body: String, choices: Array, on_cancel := Callable(), accent := UiKit.LITURGICAL_GOLD) -> ChoiceOverlay:
+static func ask(parent: Node, title: String, body: String, choices: Array, on_cancel := Callable(), accent := UiKit.LITURGICAL_GOLD, shade := 0.8) -> ChoiceOverlay:
 	var overlay := ChoiceOverlay.new()
+	overlay._shade = shade
 	overlay._on_cancel = on_cancel
 	overlay.add_to_group("modal")
 	parent.add_child(overlay)
@@ -19,12 +21,16 @@ static func ask(parent: Node, title: String, body: String, choices: Array, on_ca
 
 func _build(title: String, body: String, choices: Array, accent: Color) -> void:
 	var shade := ColorRect.new()
-	shade.color = Color(0.03, 0.01, 0.05, 0.8)
+	shade.color = Color(0.03, 0.01, 0.05, _shade)
 	add_child(shade)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var center := CenterContainer.new()
 	add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if _shade < 0.5:
+		# Keep the middle of the scene in view: the panel sits low.
+		center.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+		center.offset_top = -360
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(660, 0)
 	center.add_child(panel)
