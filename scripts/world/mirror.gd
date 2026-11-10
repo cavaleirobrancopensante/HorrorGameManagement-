@@ -24,7 +24,7 @@ func setup(glass_width: float, glass_height: float) -> void:
 	_camera = Camera3D.new()
 	_camera.projection = Camera3D.PROJECTION_FRUSTUM
 	_camera.keep_aspect = Camera3D.KEEP_HEIGHT
-	_camera.cull_mask = TrailerWorld.LAYER_WORLD | TrailerWorld.LAYER_BODY
+	_camera.cull_mask = TrailerWorld.LAYER_WORLD | TrailerWorld.LAYER_BODY | TrailerWorld.LAYER_REFLECTION
 	_viewport.add_child(_camera)
 
 	var glass := MeshInstance3D.new()

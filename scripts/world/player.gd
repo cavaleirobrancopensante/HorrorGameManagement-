@@ -46,7 +46,7 @@ func _init() -> void:
 	camera.fov = 75.0
 	camera.near = 0.05
 	camera.far = 90.0
-	camera.cull_mask = 0xFFFFF & ~(TrailerWorld.LAYER_BODY | TrailerWorld.LAYER_CCTV_ONLY)
+	camera.cull_mask = 0xFFFFF & ~(TrailerWorld.LAYER_BODY | TrailerWorld.LAYER_CCTV_ONLY | TrailerWorld.LAYER_REFLECTION)
 	add_child(camera)
 
 	arm = FirstPersonArm.new()

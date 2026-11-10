@@ -185,6 +185,14 @@ func _make_feed(index: int) -> Control:
 	for state in ["normal", "hover", "pressed", "focus"]:
 		frame.add_theme_stylebox_override(state, empty)
 	frame.pressed.connect(_focus_feed.bind(-1 if _focused_feed == index else index))
+	if Horror.feeds_off(game.save):
+		var seized := UiKit.label("FEED SEIZED\nCivic Link public supervision", 24, Color("#ff6a70"))
+		seized.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		seized.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		seized.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		frame.add_child(seized)
+		seized.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		return frame
 	var picture := TextureRect.new()
 	picture.texture = unit.viewport.get_texture()
 	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
