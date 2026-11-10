@@ -31,10 +31,10 @@ const DAY_FOG := Color("#6f7178")
 
 var mirror: Mirror
 ## Places on the grill and counters where food can sit.
-var grill_spots: Array[FoodSpot] = []
-var counter_spots: Array[FoodSpot] = []
-var ketchup_spot: FoodSpot
-var mustard_spot: FoodSpot
+## Where food belongs: the grill, the serving counter and the prep board.
+var surfaces: Array[Surface] = []
+## Where the sauce bottles start.
+const BOTTLE_HOMES := {"ketchup": Vector3(2.22, 0.95, 2.78), "mustard": Vector3(2.36, 0.95, 2.78), "mayo": Vector3(2.5, 0.95, 2.78)}
 var cameras: Array[SecurityCamera] = []
 
 var _environment: Environment
@@ -42,6 +42,11 @@ var _daylight := -1.0
 var _interior_lights: Array[OmniLight3D] = []
 var _lamp_meshes: Array[Node3D] = []
 var _bathroom_light: OmniLight3D
+var _griddle: MeshInstance3D
+var _upgrades := {}
+var _tv_screen: MeshInstance3D
+var _tv_light: OmniLight3D
+var _tv_wait := 0.0
 ## St. Brigid's, built out of sight of the street.
 var church: Church
 var _street_light: OmniLight3D
@@ -140,6 +145,19 @@ func _cyl(radius: float, height: float, center: Vector3, material: Material, rot
 
 
 ## An invisible box the player can use. It also blocks walking.
+func _surface(surface: Surface) -> void:
+	add_child(surface)
+	surfaces.append(surface)
+
+
+## The food surface under a point, or null.
+func surface_at(point: Vector3) -> Surface:
+	for surface in surfaces:
+		if surface.contains(point):
+			return surface
+	return null
+
+
 func _zone(a: Vector3, b: Vector3, id: String, parent: Node3D = null) -> Interactable:
 	var zone := Interactable.new()
 	zone.id = id
@@ -278,6 +296,34 @@ func _build_environment() -> void:
 	add_child(holder)
 
 
+## Shows what you have bought: the street TV, the neon sign, the pro griddle.
+func apply_upgrades(owned: Dictionary) -> void:
+	for id: String in owned:
+		if not owned[id] or _upgrades.has(id):
+			continue
+		_upgrades[id] = true
+		match id:
+			"tv":
+				_span(Vector3(3.25, 1.45, WIDTH + 0.13), Vector3(4.05, 1.95, WIDTH + 0.2), _c("#141216"), false)
+				_tv_screen = _span(Vector3(3.29, 1.49, WIDTH + 0.2), Vector3(4.01, 1.91, WIDTH + 0.205), _g("#6f9fd0"), false) as MeshInstance3D
+				_span(Vector3(3.6, 1.95, WIDTH + 0.12), Vector3(3.7, 2.2, WIDTH + 0.16), _c("#2b2b30"), false)
+				_tv_light = _light(Vector3(3.65, 1.7, WIDTH + 0.6), "#7fb0e0", 0.5, 2.5, false)
+			"neon":
+				var neon := Label3D.new()
+				neon.text = "OPEN LATE"
+				neon.font = UiKit.title_font()
+				neon.font_size = 96
+				neon.pixel_size = 0.004
+				neon.modulate = Color("#ff5fa8")
+				neon.outline_size = 12
+				neon.outline_modulate = Color("#ff5fa8", 0.35)
+				neon.position = Vector3(4.9, HEIGHT + 0.55, WIDTH + 0.13)
+				add_child(neon)
+				_light(Vector3(4.9, HEIGHT + 0.5, WIDTH + 0.8), "#ff5fa8", 0.9, 4.0, false)
+			"grill":
+				_griddle.material_override = TextureFactory.plain(Color("#5a5e63"), 0.35)
+
+
 ## Inside St. Brigid's the air is clear; outside the city haze closes in.
 func set_in_church(inside: bool) -> void:
 	_environment.fog_density = 0.008 if inside else 0.03
@@ -348,11 +394,8 @@ func _build_kitchen() -> void:
 		_span(Vector3(x - 0.01, 0.08, 2.605), Vector3(x + 0.01, 0.84, 2.62), dark, false)
 	# Griddle with four places to cook.
 	_span(Vector3(1.25, 0.95, 2.68), Vector3(2.05, 1.0, 3.12), dark, false)
-	_span(Vector3(1.28, 1.0, 2.71), Vector3(2.02, 1.006, 3.09), _c("#1b1a1c"), false)
-	for at in [Vector3(1.45, 1.006, 2.8), Vector3(1.85, 1.006, 2.8), Vector3(1.45, 1.006, 3.0), Vector3(1.85, 1.006, 3.0)]:
-		var spot := FoodSpot.create(at, 0.36, 0.18, true)
-		add_child(spot)
-		grill_spots.append(spot)
+	_griddle = _span(Vector3(1.28, 1.0, 2.71), Vector3(2.02, 1.006, 3.09), _c("#1b1a1c"), false) as MeshInstance3D
+	_surface(Surface.create("grill", "grill", "grill", 1.28, 2.02, 2.71, 3.09, 1.006))
 	# Fridge drawers for sausages and patties, under the griddle.
 	for drawer: Array in [[1.27, 1.63, "take_sausage", "SAUSAGES"], [1.67, 2.03, "take_patty", "PATTIES"]]:
 		_span(Vector3(drawer[0], 0.4, 2.6), Vector3(drawer[1], 0.85, 2.62), _m("steel"), false)
@@ -374,13 +417,9 @@ func _build_kitchen() -> void:
 	for i in 3:
 		_span(Vector3(0.45 + i * 0.12, 1.1, 2.82), Vector3(0.54 + i * 0.12, 1.15, 2.95), _c("#c48c4c"), false)
 	_zone(Vector3(0.4, 0.95, 2.68), Vector3(0.82, 1.18, 3.12), "take_bun")
-	# Places to set things down on the serving counter; the sauces start here.
-	for at in [Vector3(1.03, 0.95, 2.86), Vector3(2.22, 0.95, 2.86), Vector3(2.42, 0.95, 2.86)]:
-		var spot := FoodSpot.create(at, 0.2 if at.x > 2.0 else 0.38, 0.3, false)
-		add_child(spot)
-		counter_spots.append(spot)
-	ketchup_spot = counter_spots[1]
-	mustard_spot = counter_spots[2]
+	# The serving counter either side of the grill; the sauces start on the right.
+	_surface(Surface.create("serving", "serving counter", "prep", 0.84, 1.26, 2.6, 3.18, 0.95))
+	_surface(Surface.create("serving", "serving counter", "prep", 2.06, 2.6, 2.6, 3.18, 0.95))
 	# Till.
 	_span(Vector3(2.6, 0.95, 2.72), Vector3(3.05, 1.1, 3.08), _c("#2a2a2e"), false)
 	_box(Vector3(0.3, 0.13, 0.02), Vector3(2.82, 1.18, 2.84), _g("#3e8a63"), false, Vector3(-30.0, 0.0, 0.0))
@@ -388,9 +427,20 @@ func _build_kitchen() -> void:
 	_span(Vector3(3.15, 1.25, WIDTH - 0.04), Vector3(3.3, 1.6, WIDTH - 0.01), _c("#2b2b30"), false)
 	_box(Vector3(0.03, 0.18, 0.03), Vector3(3.22, 1.5, WIDTH - 0.07), _c("#a3302c"), false, Vector3(25.0, 0.0, 0.0))
 	_zone(Vector3(3.1, 1.2, WIDTH - 0.15), Vector3(3.35, 1.65, WIDTH), "hatch")
-	# Kitchen bin.
-	_cyl(0.18, 0.6, Vector3(3.15, 0.3, 0.95), _c("#26352b"))
-	_zone(Vector3(2.95, 0.0, 0.75), Vector3(3.35, 0.62, 1.15), "bin")
+	# Kitchen bin, by the grill where you need it, and labelled.
+	_cyl(0.2, 0.7, Vector3(3.1, 0.35, 2.3), _c("#2f6b45"))
+	_cyl(0.21, 0.04, Vector3(3.1, 0.72, 2.3), _c("#1f4a30"))
+	_span(Vector3(3.06, 0.74, 2.12), Vector3(3.14, 0.76, 2.2), _c("#9aa3a0"), false)
+	var bin_tag := Label3D.new()
+	bin_tag.text = "BIN"
+	bin_tag.font = UiKit.title_font()
+	bin_tag.font_size = 64
+	bin_tag.pixel_size = 0.0025
+	bin_tag.modulate = Color("#e6e0d2")
+	bin_tag.position = Vector3(2.89, 0.5, 2.3)
+	bin_tag.rotation_degrees.y = -90.0
+	add_child(bin_tag)
+	_zone(Vector3(2.88, 0.0, 2.08), Vector3(3.32, 0.78, 2.52), "bin")
 
 	# Prep counter, kettle and fryer along the back wall.
 	_span(Vector3(0.3, 0.0, 0.0), Vector3(2.3, 0.9, 0.62), steel)
@@ -400,10 +450,7 @@ func _build_kitchen() -> void:
 	_cyl(0.035, 0.08, Vector3(1.05, 0.99, 0.25), _c("#d8d2c0"))
 	_zone(Vector3(0.5, 0.9, 0.08), Vector3(1.15, 1.22, 0.58), "coffee")
 	_span(Vector3(1.18, 0.95, 0.12), Vector3(2.08, 0.965, 0.52), _m("wood_light"), false)
-	for x in [1.33, 1.63, 1.93]:
-		var spot := FoodSpot.create(Vector3(x, 0.965, 0.32), 0.28, 0.38, false)
-		add_child(spot)
-		counter_spots.append(spot)
+	_surface(Surface.create("prep", "prep board", "prep", 1.18, 2.08, 0.12, 0.52, 0.965))
 	_span(Vector3(1.4, 1.6, 0.0), Vector3(2.2, 1.63, 0.03), _c("#2b2b30"), false)
 	for i in 4:
 		var x := 1.5 + i * 0.18
@@ -853,6 +900,13 @@ func _set_power(level: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if _tv_screen != null:
+		_tv_wait -= delta
+		if _tv_wait <= 0.0:
+			_tv_wait = randf_range(0.6, 2.5)
+			var channel := Color.from_hsv(randf(), 0.35, randf_range(0.5, 0.9))
+			_tv_screen.material_override = TextureFactory.glow(channel)
+			_tv_light.light_color = channel
 	_tower_timer += delta
 	if _tower_timer >= 1.4:
 		_tower_timer = 0.0

@@ -7,6 +7,13 @@ extends RefCounted
 ## on a day you received Communion or went to confession.
 ##
 ## Stress feeds it: the more stressed you are, the more often you are tempted.
+##
+## RULE: a temptation is a test of your own virtue, so the provocation is
+## always personal: an insult to you, your food, your trailer, your pride.
+## Never an attack on the faith or its symbols. Standing up for the faith is
+## not a sin, and the game must never treat defending it as one. The enemies
+## hate the faith, and that shows in the persecution, not here. A test checks
+## that no temptation names the faith's symbols (FAITH_WORDS).
 
 ## Chance of a temptation in a game hour, at no stress and at full stress.
 const CHANCE_CALM := 0.10
@@ -69,7 +76,7 @@ const LIST := [
 	},
 	{
 		"id": "drunk", "sin": "anger",
-		"text": "A drunk spits at the crucifix by the till, laughs, and grabs his hot dog without paying.",
+		"text": "A drunk spits on the ground by the hatch. \"Worst joint on the street. You can't even cook a sausage.\" He grabs his hot dog and walks off without paying.",
 		"give": "Grab his wrist and twist", "resist": "Let him go",
 		"give_text": "He drops the credits and runs, holding his arm. Your hands shake for a long time.",
 		"resist_text": "You let him go. You pray for him through your teeth.",
@@ -108,6 +115,10 @@ const LIST := [
 		"hatch": true,
 	},
 ]
+
+
+## Words a temptation must never use: they would make a sin of defending the faith.
+const FAITH_WORDS := ["crucifix", "cross", "rosary", "altar", "church", "faith", "priest", "mass", "jesus", "christ", "mary", "saint", "bible", "catholic", "holy"]
 
 
 static func def(id: String) -> Dictionary:

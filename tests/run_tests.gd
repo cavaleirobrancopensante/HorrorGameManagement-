@@ -25,6 +25,7 @@ func _initialize() -> void:
 	_test_shifts()
 	_test_mass()
 	_test_stand_rules()
+	_test_supplies_and_upgrades()
 	_test_music()
 	_test_two_fingers()
 	_test_confession()
@@ -196,7 +197,7 @@ func _test_shop_and_deliveries() -> void:
 	_check(Survival.order(save, "buns") == "", "second order")
 	_check((save["world"]["deliveries"] as Array).size() == 1, "orders share a drone")
 	_check(Survival.arrived(save).is_empty(), "not yet arrived")
-	Survival.advance(save, float(GameData.DELIVERY_MINUTES))
+	Survival.advance(save, Survival.delivery_time(Survival.now(save)) - Survival.now(save))
 	_check(Survival.arrived(save).size() == 1, "delivery arrives")
 	var before := Survival.stock(save, "sausages")
 	var got := Survival.collect(save)
@@ -292,22 +293,39 @@ func _test_stand_rules() -> void:
 	_check(StandRules.cook_state(sausage, 5) == "cooked", "cooks")
 	var hot_dog: Dictionary = StandRules.combine(bun, sausage, 5)
 	_check(hot_dog["kind"] == "hot_dog" and not hot_dog["burnt"], "bun plus sausage is a hot dog")
+	var other_way: Dictionary = StandRules.combine(sausage, bun, 5)
+	_check(other_way["kind"] == "hot_dog", "roll onto cooked sausage also makes a hot dog")
 	var ketchup := StandRules.new_item("ketchup")
 	hot_dog = StandRules.combine(hot_dog, ketchup, 5)
 	_check(hot_dog["ketchup"], "ketchup added")
 	_check(str(StandRules.combine(hot_dog, ketchup, 5)) == "It already has ketchup.", "no double ketchup")
-	_check(str(StandRules.combine(bun, ketchup, 5)) == "Put the meat in first.", "sauce needs meat")
-	_check(StandRules.describe(hot_dog, 5) == "hot dog with ketchup", "describe: %s" % StandRules.describe(hot_dog, 5))
+	_check(str(StandRules.combine(bun, ketchup, 5)) == "Make the hot dog or burger first.", "sauce needs food")
+	var mayo := StandRules.new_item("mayo")
+	var with_mayo: Dictionary = StandRules.combine(hot_dog, mayo, 5)
+	_check(with_mayo["mayo"] and with_mayo["ketchup"], "mayonnaise adds to ketchup")
+	_check(StandRules.describe(with_mayo, 5) == "hot dog with ketchup and mayo", "describe: %s" % StandRules.describe(with_mayo, 5))
 	var patty := StandRules.new_item("patty")
 	patty["cook"] = 500.0
 	_check(StandRules.cook_state(patty, 5) == "burnt", "burns")
+	_check(StandRules.cook_state(patty, 5, true) == "burnt", "even a pro grill burns eventually")
+	var just_cooked := StandRules.new_item("patty")
+	just_cooked["cook"] = StandRules.COOK_SECONDS + StandRules.burn_window(5) + 1.0
+	_check(StandRules.cook_state(just_cooked, 5) == "burnt" and StandRules.cook_state(just_cooked, 5, true) == "cooked", "pro grill forgives longer")
 	var burger: Dictionary = StandRules.combine(bun, patty, 5)
 	_check(burger["kind"] == "burger" and burger["burnt"], "burnt burger")
-	_check(str(StandRules.combine(sausage, bun, 5)) == "", "roll onto sausage does nothing")
+	# Dirt and odd places carry into what you make.
+	var dirty_bun := StandRules.new_item("bun")
+	dirty_bun["dirty"] = true
+	var dirty_dog: Dictionary = StandRules.combine(dirty_bun, sausage, 5)
+	_check(dirty_dog["dirty"], "a dirty roll makes a dirty hot dog")
 
-	var order := {"food": "hot_dog", "ketchup": true, "mustard": false, "can": true}
+	var order := {"food": "hot_dog", "ketchup": true, "mustard": false, "mayo": false, "can": true}
 	_check(StandRules.give_problem(order, hot_dog, false, false) == "", "right hot dog")
+	_check(StandRules.give_problem(order, with_mayo, false, false) == "That's not what I asked for.", "unwanted mayo")
 	_check(StandRules.give_problem(order, burger, false, false) == "This is burnt!", "burnt refused")
+	var floor_dog := hot_dog.duplicate()
+	floor_dog["dirty"] = true
+	_check(StandRules.give_problem(order, floor_dog, false, false) == "That's filthy. I'm not touching it.", "dirty refused outright")
 	burger["burnt"] = false
 	_check(StandRules.give_problem(order, burger, false, false) == "I wanted a hot dog.", "wrong food")
 	_check(StandRules.give_problem(order, hot_dog, true, false) == "I already have my food.", "no second food")
@@ -315,13 +333,65 @@ func _test_stand_rules() -> void:
 	_check(StandRules.give_problem(order, can, true, false) == "", "can accepted")
 	order["can"] = false
 	_check(StandRules.give_problem(order, can, true, false) == "I didn't ask for a can.", "unwanted can")
-	_check(StandRules.price({"food": "burger", "ketchup": false, "mustard": false, "can": true}) == GameData.BURGER_PRICE + GameData.CAN_PRICE, "burger price")
-	_check(StandRules.tip(1.0, 8) > StandRules.tip(0.2, 8), "faster serving tips more")
-	_check(StandRules.tip(0.0, 20) == 0, "no tip at the last second")
+	_check(StandRules.price({"food": "burger", "ketchup": false, "mustard": false, "mayo": false, "can": true}) == GameData.BURGER_PRICE + GameData.CAN_PRICE, "burger price")
 	_check(StandRules.spawn_interval(1, 1.0) < StandRules.spawn_interval(5, 1.0), "noon busier than the dead shift")
+	_check(StandRules.spawn_interval(1, 1.0, true) < StandRules.spawn_interval(1, 1.0), "neon brings more customers")
 	_check(StandRules.eat_effect(StandRules.new_item("sausage"), 5).size() == 1, "raw meat is not eaten")
 	_check(float(StandRules.eat_effect(hot_dog, 5)["hunger"]) < 0.0, "hot dogs feed you")
-	_check(StandRules.order_text({"food": "burger", "ketchup": false, "mustard": true, "can": true}) == "Burger: mustard\n+ a can", "order text")
+	_check(StandRules.order_text({"food": "burger", "ketchup": false, "mustard": true, "mayo": true, "can": true}) == "Burger: mustard, mayo\n+ a can", "order text")
+	_check(StandRules.bottle_size(true) > StandRules.bottle_size(false), "large bottles hold more")
+
+	# Mood and tips.
+	_check(StandRules.face(90.0) == "happy" and StandRules.face(45.0) == "neutral" and StandRules.face(10.0) == "angry", "faces")
+	_check(StandRules.tip(95.0, 8) > StandRules.tip(50.0, 8), "happier customers tip more")
+	_check(StandRules.tip(10.0, 20) == 0, "angry customers tip nothing")
+	_check(StandRules.mood_decay(5, true) < StandRules.mood_decay(5, false), "the TV keeps them patient")
+
+	# Out of stock: they settle for something else, or leave.
+	var wants := {"food": "burger", "ketchup": false, "mustard": false, "mayo": true, "can": true}
+	var stocked := {"hot_dog": true, "burger": true, "ketchup": true, "mustard": true, "mayo": true, "can": true}
+	_check(StandRules.missing(wants, stocked).is_empty(), "nothing missing")
+	var short := stocked.duplicate()
+	short["burger"] = false
+	short["mayo"] = false
+	_check(StandRules.missing(wants, short).size() == 2, "missing burgers and mayo")
+	var settled := StandRules.substitute(wants, short)
+	_check(settled["food"] == "hot_dog" and not settled["mayo"] and settled["can"], "settles for a hot dog without mayo")
+	short["hot_dog"] = false
+	_check(StandRules.substitute(wants, short).is_empty(), "nothing to eat: they leave")
+
+	# Hints name the next step.
+	var raw := StandRules.new_item("sausage")
+	_check(StandRules.hint(raw, [], 5)["id"] == "grill", "raw meat: grill it")
+	_check(StandRules.hint(sausage, [], 5)["id"] == "assemble", "cooked meat: into a roll")
+	_check(StandRules.hint(hot_dog, [order], 5)["id"] == "serve", "finished order: serve it")
+	var plain_dog: Dictionary = StandRules.combine(bun, sausage, 5)
+	_check(StandRules.hint(plain_dog, [order], 5)["id"] == "sauce", "needs ketchup: sauce it")
+	_check(StandRules.hint(floor_dog, [order], 5)["id"] == "bin", "dirty: bin it")
+
+
+func _test_supplies_and_upgrades() -> void:
+	var save := _new_save()
+	save["survival"]["money"] = 500
+	# Deliveries land at the start of the shift after next.
+	var now := Survival.now(save)
+	_check(Survival.delivery_time(now) - now > Survival.SHIFT_MINUTES, "deliveries take more than a shift")
+	_check(Survival.delivery_time(now) - now <= 2.0 * Survival.SHIFT_MINUTES, "and at most two")
+	_check(Survival.stock(save, "mayo") > 0 and Survival.stock(save, "cleaner") > 0, "start with refills and spray")
+	_check(Survival.order(save, "tv") == "", "buy the TV")
+	_check(Survival.order(save, "tv") == "You already have that.", "only one TV")
+	_check(not Survival.has_upgrade(save, "tv"), "not installed before it lands")
+	Survival.advance(save, Survival.delivery_time(Survival.now(save)) - Survival.now(save))
+	Survival.collect(save)
+	_check(Survival.has_upgrade(save, "tv"), "installed when carried in")
+	_check(Survival.stock(save, "tv") == 0, "an upgrade is not stock")
+	# Old saves get the new supplies.
+	var old := _new_save()
+	(old["world"]["stock"] as Dictionary).erase("mayo")
+	(old["world"] as Dictionary).erase("upgrades")
+	(old["world"] as Dictionary).erase("learned")
+	Survival.ensure(old)
+	_check(Survival.stock(old, "mayo") > 0 and old["world"]["upgrades"] is Dictionary and old["world"]["learned"] is Dictionary, "old saves upgraded")
 
 
 func _test_music() -> void:
@@ -456,6 +526,11 @@ func _test_temptation() -> void:
 		covered[entry["sin"]] = true
 		_check(not GameData.sin_def(entry["sin"]).is_empty(), "temptation %s has a real sin" % entry["id"])
 	_check(covered.size() == GameData.SINS.size(), "every capital sin tempts")
+	# Temptations are personal, never an attack on the faith.
+	for entry: Dictionary in Temptation.LIST:
+		var words := (str(entry["text"]) + " " + str(entry["give"]) + " " + str(entry["give_text"])).to_lower()
+		for banned: String in Temptation.FAITH_WORDS:
+			_check(not (" " + banned) in (" " + words.replace(".", " ").replace(",", " ")), "temptation %s keeps the faith out of it: %s" % [entry["id"], banned])
 	# Stress makes temptation likelier.
 	Survival.change_need(save, "stress", -100.0)
 	var calm := Temptation.chance_per_hour(save)

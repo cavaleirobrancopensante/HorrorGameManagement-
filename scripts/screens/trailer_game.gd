@@ -147,6 +147,7 @@ func _restore() -> void:
 		player.rotation.y = TrailerWorld.SPAWN_YAW
 	_set_in_church(Church.contains(player.position))
 	world.set_hatch_open(bool(state["hatch_open"]), false)
+	world.apply_upgrades(state["upgrades"])
 	_arrived = Survival.arrived(save).size()
 	world.show_crates(_arrived)
 	_update_day()
@@ -179,16 +180,18 @@ func _process(delta: float) -> void:
 			_flicker_wait = _rng.randf_range(45.0, 120.0)
 			world.flicker()
 	var target := player.focused
-	hud.set_prompt("" if _busy or target == null else _prompt_for(target))
+	var prompt := "" if _busy else _prompt_for(target)
+	hud.set_prompt(prompt)
 	hud.set_holding("" if _busy else stand.held_text(), stand.can_eat_held())
+	hud.set_step("" if _busy else stand.hint())
 	player.arm.holding = stand.held != null
 	_update_body_pose()
 	hud.bubbles = [] if _busy else stand.bubbles(player.camera, float(PIXEL_SCALE))
 	if touch.hand_ready != stand.can_eat_held():
 		touch.hand_ready = stand.can_eat_held()
 		touch.queue_redraw()
-	if touch.use_ready != (target != null):
-		touch.use_ready = target != null
+	if touch.use_ready != not prompt.is_empty():
+		touch.use_ready = not prompt.is_empty()
 		touch.queue_redraw()
 	hud.refresh()
 
@@ -359,7 +362,7 @@ func _toggle_light() -> void:
 
 func _prompt_for(target: Interactable) -> String:
 	var kitchen := stand.prompt_for(target)
-	if not kitchen.is_empty() or target.id == "customer":
+	if target == null or not kitchen.is_empty() or target.id in ["customer", "item", "surface"]:
 		return kitchen
 	match target.id:
 		"door":
@@ -419,12 +422,10 @@ func _interact() -> void:
 	if _busy or _dead or _paused:
 		return
 	var target := player.focused
-	if target == null:
-		return
 	if _prompt_for(target).is_empty():
 		return
 	player.arm.reach()
-	if stand.use(target):
+	if stand.use(target) or target == null:
 		return
 	match target.id:
 		"door":
@@ -557,10 +558,18 @@ func _collect() -> void:
 	_arrived = 0
 	world.show_crates(0)
 	var parts: PackedStringArray = []
+	var installed: PackedStringArray = []
 	for id: String in items:
-		parts.append("%d %s" % [items[id], GameData.product_def(id)["name"].to_lower()])
+		if not GameData.upgrade_def(id).is_empty():
+			installed.append(GameData.upgrade_def(id)["name"].to_lower())
+		else:
+			parts.append("%d %s" % [items[id], GameData.product_def(id)["name"].to_lower()])
 	Sound.play("door", 0.2, -4.0)
-	hud.toast("You carry in %s." % ", ".join(parts))
+	if not parts.is_empty():
+		hud.toast("You carry in %s." % ", ".join(parts))
+	if not installed.is_empty():
+		world.apply_upgrades(save["world"]["upgrades"])
+		hud.toast("You install the %s." % " and the ".join(installed))
 
 
 func _sleep() -> void:

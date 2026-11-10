@@ -26,6 +26,14 @@ Play a shift freely, or spend it on work, rest, sleep, prayer or Mass from the
 day planner (wall calendar, C, or the Day button). Missing Sunday Mass costs the
 state of grace; the Saturday evening vigil counts.
 
+## The kitchen
+
+- Take meat from the drawers under the grill, rolls from the bread bin, cans from the cooler.
+- Put anything down anywhere. Meat cooks wherever it sits on the grill. Put meat and a roll together where they lie, then add sauce: look at a bottle with the food in your hand.
+- Food belongs on the grill, the serving counter and the prep board. Elsewhere, customers mind; on the floor or a filthy counter, they refuse it. Wipe counters with cleaning spray. The bin is at the end of the serving counter.
+- Customers show a face and a mood bar. Happier customers tip more. If you are out of something, tell them and they order something else.
+- Everything runs out: meat, rolls, cans, sauce, spray. Deliveries land at the start of the shift after next. Upgrades (street TV, pro griddle, large bottles, neon sign) are on the computer.
+
 ## The soul
 
 - **Temptations** come during the day, one per shift at most, more often when you are stressed. Giving in helps you and eases stress, but goes on your record and pushes the horror toward the demonic. Resisting costs stress, more for the sins you struggle with.
