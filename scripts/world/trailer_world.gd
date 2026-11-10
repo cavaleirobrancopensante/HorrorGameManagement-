@@ -47,6 +47,12 @@ var _bathroom_light: OmniLight3D
 var _griddle: MeshInstance3D
 var _blacked_out := false
 var _window_shutter: Node3D
+var _window_shutter_body: StaticBody3D
+var _hatch_body: StaticBody3D
+## The trailer's front door, which gangs try to break down.
+var entrance: Door
+## The doors inside the trailer, which anyone can open.
+var inner_doors: Array[Door] = []
 var _upgrades := {}
 var _tv_screen: MeshInstance3D
 var _tv_light: OmniLight3D
@@ -303,6 +309,7 @@ func _build_environment() -> void:
 ## Rolls the window shutter down or up.
 func set_shutters(closed: bool, animate: bool) -> void:
 	var target := 1.0 if closed else 0.02
+	_window_shutter_body.collision_layer = 1 if closed else 0
 	if not animate:
 		_window_shutter.scale.y = target
 		return
@@ -385,13 +392,28 @@ func _build_shell() -> void:
 	_partition(false, 9.0, 0.0, 1.8, [[0.95, 1.75, 0.0, 2.0]], "wallpaper", "wall_bath")
 	_partition(true, 1.8, 8.96, LENGTH, [], "wall_bath", "wallpaper")
 
-	var entrance := Door.create(0.86, 1.98, _m("skin"), 0.0, -100.0)
+	entrance = Door.create(0.86, 1.98, _m("skin"), 0.0, -100.0)
+	# Planks to nail across it from inside, stacked by the door.
+	var planks := Node3D.new()
+	add_child(planks)
+	for i in 3:
+		var plank := _span(Vector3(4.3, 0.45 + i * 0.6, WIDTH - 0.16), Vector3(5.4, 0.6 + i * 0.6, WIDTH - 0.11), _m("wood"), false)
+		plank.reparent(planks)
+		plank.rotation_degrees.z = (-8.0 if i % 2 == 0 else 7.0)
+	planks.visible = false
+	entrance.set_barricade(false, planks)
+	# The spare planks lie on the freezer lid, beside the door.
+	for i in 3:
+		_span(Vector3(3.66, 0.85 + i * 0.03, 2.66 + i * 0.13), Vector3(4.3, 0.88 + i * 0.03, 2.77 + i * 0.13), _m("wood"), false)
+	_zone(Vector3(3.62, 0.84, 2.6), Vector3(4.34, 1.0, 3.1), "barricade")
 	entrance.position = Vector3(4.42, 0.0, WIDTH + 0.06)
 	add_child(entrance)
 	var home_door := Door.create(0.81, 1.98, _m("wood"), -90.0, 0.0)
+	inner_doors.append(home_door)
 	home_door.position = Vector3(6.0, 0.0, 1.17)
 	add_child(home_door)
 	var bath_door := Door.create(0.76, 1.98, _c("#d4d0c4"), 90.0, 180.0)
+	inner_doors.append(bath_door)
 	bath_door.position = Vector3(9.0, 0.0, 1.73)
 	add_child(bath_door)
 
@@ -605,6 +627,12 @@ func _build_home() -> void:
 	glass.position = Vector3(8.3, 1.375, WIDTH + 0.06)
 	add_child(glass)
 	_span(Vector3(7.72, 1.88, WIDTH - 0.06), Vector3(8.88, 1.9, WIDTH - 0.04), _c("#2b2b30"), false)
+	# First aid box on the bathroom's back wall.
+	_span(Vector3(10.1, 1.3, 0.0), Vector3(10.5, 1.62, 0.1), _c("#e6e2d6"), false)
+	_span(Vector3(10.27, 1.36, 0.1), Vector3(10.33, 1.56, 0.105), _c("#b8262b"), false)
+	_span(Vector3(10.2, 1.43, 0.1), Vector3(10.4, 1.49, 0.105), _c("#b8262b"), false)
+	_zone(Vector3(10.08, 1.28, 0.0), Vector3(10.52, 1.64, 0.14), "first_aid")
+
 	# Roller shutter inside the window: a box at the top it rolls down from.
 	_span(Vector3(7.86, 1.78, WIDTH - 0.13), Vector3(8.74, 1.88, WIDTH - 0.03), _c("#3a3c40"), false)
 	_window_shutter = Node3D.new()
@@ -626,7 +654,10 @@ func _build_home() -> void:
 		groove.position.y = -0.05 - i * 0.1
 		_window_shutter.add_child(groove)
 	_window_shutter.scale.y = 0.02
-	_zone(Vector3(7.86, 0.98, WIDTH - 0.2), Vector3(8.74, 1.78, WIDTH - 0.1), "shutters")
+	# Closed, it stops shots, sight and drones; open, nothing.
+	_window_shutter_body = _blocker(Vector3(7.88, 0.98, WIDTH - 0.1), Vector3(8.72, 1.78, WIDTH - 0.06))
+	var shutter_zone := _zone(Vector3(7.86, 0.98, WIDTH - 0.2), Vector3(8.74, 1.78, WIDTH - 0.1), "shutters")
+	shutter_zone.collision_layer = Surface.PICK_LAYER
 	_span(Vector3(7.72, 0.95, WIDTH - 0.08), Vector3(7.95, 1.88, WIDTH - 0.05), _m("fabric"), false)
 	_span(Vector3(8.65, 0.95, WIDTH - 0.08), Vector3(8.88, 1.88, WIDTH - 0.05), _m("fabric"), false)
 
@@ -887,7 +918,46 @@ func _build_cameras() -> void:
 
 # Changing state ---------------------------------------------------------------
 
+## How much ramming the window shutter takes before it tears open.
+var shutter_health := 60.0
+var _shutter_thump := 0.0
+
+
+## Something outside is tearing at the closed shutter.
+func bash_shutter(amount: float, game: Node) -> void:
+	if _window_shutter_body.collision_layer == 0:
+		return
+	shutter_health -= amount
+	_shutter_thump -= amount
+	if _shutter_thump <= 0.0:
+		_shutter_thump = 8.0
+		Sound.play("knock", 0.2, 0.0)
+	if shutter_health <= 0.0:
+		shutter_health = 60.0
+		Sound.play("glass", 0.0, -2.0)
+		game.save["world"]["shutters_closed"] = false
+		set_shutters(false, true)
+		game.hud.toast("The shutter tears open.")
+
+
+## An invisible wall that can be switched on and off.
+func _blocker(a: Vector3, b: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = (b - a).abs()
+	shape.shape = box
+	body.add_child(shape)
+	body.position = (a + b) / 2.0
+	body.collision_layer = 0
+	add_child(body)
+	return body
+
+
 func set_hatch_open(open: bool, animate: bool) -> void:
+	if _hatch_body == null:
+		_hatch_body = _blocker(Vector3(0.5, 1.0, WIDTH + 0.02), Vector3(3.0, 1.9, WIDTH + 0.08))
+	_hatch_body.collision_layer = 0 if open else 1
 	var angle := -80.0 if open else 0.0
 	_hatch_spill.visible = open
 	if animate:

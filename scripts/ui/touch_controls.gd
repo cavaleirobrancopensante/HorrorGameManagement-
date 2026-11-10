@@ -13,6 +13,9 @@ signal light_pressed
 signal pause_pressed
 signal plan_pressed
 signal hand_pressed
+signal arm_pressed
+## What the Arm button says: the weapon in hand, or "Arm".
+var arm_label := "Arm"
 
 const STICK_RADIUS := 90.0
 const LOOK_SPEED := 0.0055
@@ -93,6 +96,7 @@ func _buttons() -> Dictionary:
 		"pause": [Vector2(size.x - 60, 52), 38.0],
 		"plan": [Vector2(size.x - 60, 140), 38.0],
 		"hand": [Vector2(size.x - 285, size.y - 205), 50.0],
+		"arm": [Vector2(size.x - 140, size.y - 305), 50.0],
 	}
 
 
@@ -156,6 +160,9 @@ func _press(finger: int, at: Vector2) -> void:
 					plan_pressed.emit()
 				"hand":
 					hand_pressed.emit()
+				"arm":
+					arm_pressed.emit()
+					queue_redraw()
 			return
 	if at.x < size.x * 0.42:
 		if finger == _look_finger:
@@ -181,12 +188,12 @@ func _draw() -> void:
 	draw_circle(base + _stick_knob, 34.0, Color(UiKit.TALLOW, alpha))
 
 	var buttons := _buttons()
-	var labels := {"use": "Use", "light": "Torch", "pause": "", "plan": "Day", "hand": "Eat"}
+	var labels := {"use": "Use", "light": "Torch", "pause": "", "plan": "Day", "hand": "Eat", "arm": arm_label}
 	for id: String in buttons:
 		var spot: Array = buttons[id]
 		var center: Vector2 = spot[0]
 		var radius: float = spot[1]
-		var active := (id == "use" and use_ready) or (id == "light" and light_on) or (id == "hand" and hand_ready)
+		var active := (id == "use" and use_ready) or (id == "light" and light_on) or (id == "hand" and hand_ready) or (id == "arm" and arm_label != "Arm")
 		draw_circle(center, radius, Color(UiKit.VESTMENT, 0.75 if active else 0.45))
 		draw_arc(center, radius, 0.0, TAU, 32, UiKit.SODIUM if active else Color(UiKit.TALLOW, 0.5), 3.0)
 		if id == "pause":

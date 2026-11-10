@@ -60,6 +60,12 @@ Small scares build dread; a big scare (blackout, mirror, face, blow, raid, the w
 
 Close the window shutter before you sleep. Burglars come more for cash, mostly give up at a closed shutter, and can be fought (Endurance, Vigilance) or let be. Leaning toward sin, you may wake unable to move.
 
+## Combat
+
+R, the mouse wheel or the Arm button cycles bat, slingshot and empty hands; with a weapon out, use attacks (doors and shutters still work when you stand right at them). The slingshot uses steel shot from the shop; Marksmanship sets its spread and damage, stress widens it. Endurance adds to the bat and softens hits. Bandages from the first aid box in the bathroom heal.
+
+Gangs come some nights (thugs bash the door; shooters fire through open windows and the hatch). Civic drones hunt the faithful through any opening, and ram the shutter or door when everything is shut. Closing up takes range away from both sides and forces a fight at the door. Barricade it with the planks on the freezer lid for three times the bashing. A compliance contribution on the computer's Standing tab keeps the state away for three days. Rules: `scripts/core/combat.gd`; enemies: `scripts/world/enemy.gd`; weapons: `scripts/world/fighter.gd`.
+
 ## Patch notes
 
 The version is on the main menu; press it for every patch's changes. They live in `scripts/core/changelog.gd`, and its first entry must match `config/version` in `project.godot`.

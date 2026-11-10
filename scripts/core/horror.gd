@@ -148,6 +148,9 @@ static func roll(save: Dictionary, rng: RandomNumberGenerator, context: Dictiona
 	if rng.randf() >= chance(save):
 		return {}
 	var side := "demonic" if rng.randf() < demonic_weight(save) else "state"
+	# A compliance contribution buys a few days without the state.
+	if side == "state" and Survival.now(save) < float(save["horror"].get("compliance_until", 0.0)):
+		return {}
 	var options: Array = []
 	for event: Dictionary in EVENTS:
 		if event["side"] == side and available(save, event, context):

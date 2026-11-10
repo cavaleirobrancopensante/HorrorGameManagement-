@@ -261,12 +261,32 @@ func _draw_age(age: String, skin: Color, bald: bool) -> void:
 func _draw_right_arm(look: Dictionary, skin: Color, woman: bool) -> void:
 	if pose == "rest":
 		return
+	# Weapons: the bat held up or swung, the slingshot held out.
+	var arm_pose := pose
+	var thing := held
+	match pose:
+		"bat":
+			arm_pose = "hold"
+			thing = "bat"
+		"swing":
+			arm_pose = "reach"
+			thing = "bat_swung"
+		"slingshot", "shoot":
+			arm_pose = "reach"
+			thing = "slingshot"
+	var saved := held
+	held = thing
+	_draw_arm_pose(arm_pose, look, skin, woman)
+	held = saved
+
+
+func _draw_arm_pose(arm_pose: String, look: Dictionary, skin: Color, woman: bool) -> void:
 	var half := {"lean": 13, "average": 15, "heavy": 18}.get(look["build"], 15) as int
 	if woman:
 		half -= 2
 	var sleeve := shirt_colour.darkened(0.12)
 	var x := CENTER - half
-	match pose:
+	match arm_pose:
 		"hold":
 			# Upper arm down the side, forearm raised across the chest.
 			_r(x, 44, 4, 14, sleeve)
@@ -327,6 +347,18 @@ func _draw_held(x: int, y: int) -> void:
 		"can":
 			_r(x - 1, y - 4, 3, 5, Color("#a3302c"))
 			_r(x - 1, y - 4, 3, 1, Color("#b7b7bd"))
+		"bat":
+			# Up over the shoulder.
+			for i in 16:
+				_r(x - 1 - i / 2, y - 2 - i, 2 + (1 if i > 8 else 0), 1, Color("#8a5a32") if i > 3 else Color("#1e1b1a"))
+		"bat_swung":
+			for i in 16:
+				_r(x + i, y - 1, 1, 2 + (1 if i > 8 else 0), Color("#8a5a32") if i > 3 else Color("#1e1b1a"))
+		"slingshot":
+			_r(x - 1, y - 1, 2, 4, Color("#6b4426"))
+			_r(x - 3, y - 5, 2, 4, Color("#6b4426"))
+			_r(x + 1, y - 5, 2, 4, Color("#6b4426"))
+			_r(x - 2, y - 5, 4, 1, Color("#7a2a22"))
 		_:
 			_r(x - 2, y - 2, 4, 4, Color("#8a8590"))
 

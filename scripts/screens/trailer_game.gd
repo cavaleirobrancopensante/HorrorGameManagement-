@@ -37,6 +37,8 @@ var _body_look := ""
 var _tempt_minutes := 0.0
 ## Stages the demonic and the state, from the state of your soul.
 var horror: HorrorDirector
+## Your bat and slingshot.
+var fighter: Fighter
 var _in_church := false
 
 
@@ -93,6 +95,7 @@ func _build() -> void:
 	touch.pause_pressed.connect(go_back)
 	touch.plan_pressed.connect(_open_planner)
 	touch.hand_pressed.connect(_use_hand)
+	touch.arm_pressed.connect(_cycle_weapon)
 	stand = Stand.new()
 	add_child(stand)
 	stand.setup(self)
@@ -100,6 +103,9 @@ func _build() -> void:
 	horror = HorrorDirector.new()
 	add_child(horror)
 	horror.setup(self)
+	fighter = Fighter.new()
+	add_child(fighter)
+	fighter.setup(self)
 	_set_busy(false)
 
 
@@ -187,9 +193,14 @@ func _process(delta: float) -> void:
 			_flicker_wait = _rng.randf_range(45.0, 120.0)
 			world.flicker()
 	var target := player.focused
-	var prompt := "" if _busy else _prompt_for(target)
+	var prompt := "" if _busy or fighter.attacks(target) else _prompt_for(target)
 	hud.set_prompt(prompt)
-	hud.set_holding("" if _busy else stand.held_text(), stand.can_eat_held())
+	if fighter.armed():
+		hud.set_holding("" if _busy else fighter.text() + ("" if _touch_mode else "   (R to switch)"), false)
+		touch.arm_label = fighter.text().get_slice(" ", 0)
+	else:
+		hud.set_holding("" if _busy else stand.held_text(), stand.can_eat_held())
+		touch.arm_label = "Arm"
 	hud.set_step("" if _busy else stand.hint())
 	player.arm.holding = stand.held != null
 	_update_body_pose()
@@ -197,8 +208,9 @@ func _process(delta: float) -> void:
 	if touch.hand_ready != stand.can_eat_held():
 		touch.hand_ready = stand.can_eat_held()
 		touch.queue_redraw()
-	if touch.use_ready != not prompt.is_empty():
-		touch.use_ready = not prompt.is_empty()
+	var ready := not prompt.is_empty() or fighter.armed()
+	if touch.use_ready != ready:
+		touch.use_ready = ready
 		touch.queue_redraw()
 	hud.refresh()
 
@@ -280,6 +292,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("plan_day"):
 		_open_planner()
 		return
+	if event.is_action_pressed("weapon"):
+		_cycle_weapon()
+		return
 	if _touch_mode:
 		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
@@ -291,6 +306,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_interact()
 		elif (event as InputEventMouseButton).button_index == MOUSE_BUTTON_RIGHT:
 			_use_hand()
+		elif (event as InputEventMouseButton).button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and not _busy:
+			_cycle_weapon()
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not _busy:
 		player.look((event as InputEventMouseMotion).relative * MOUSE_SPEED)
 
@@ -402,6 +419,20 @@ func _prompt_for(target: Interactable) -> String:
 			return "Plan the day"
 		"shutters":
 			return "Open the shutters" if save["world"]["shutters_closed"] else "Close the shutters"
+		"barricade":
+			var door := world.entrance
+			if door.barricaded:
+				return "Take down the barricade"
+			if door.is_open:
+				return "Planks (close the door to barricade it)"
+			return "Barricade the door"
+		"first_aid":
+			var bandages := Survival.stock(save, "bandages")
+			if bandages <= 0:
+				return "First aid box: empty. Order bandages."
+			if Survival.health(save) >= Survival.max_health(save):
+				return "First aid box (%d bandages)" % bandages
+			return "Bandage your wounds (%d left)" % bandages
 		"church_street":
 			if not Soul.church_open(Survival.now(save)):
 				return "St. Brigid's is locked at night"
@@ -431,9 +462,14 @@ func _interact() -> void:
 	if _busy or _dead or _paused:
 		return
 	var target := player.focused
+	if fighter.attacks(target):
+		if not _busy:
+			fighter.attack()
+		return
 	if _prompt_for(target).is_empty():
 		return
-	player.arm.reach()
+	if not fighter.armed():
+		player.arm.reach()
 	if stand.use(target) or target == null:
 		return
 	match target.id:
@@ -474,6 +510,21 @@ func _interact() -> void:
 			_collect()
 		"calendar":
 			_open_planner()
+		"barricade":
+			var door := world.entrance
+			if door.barricaded:
+				door.set_barricade(false)
+				hud.toast("You pull the planks down.")
+			elif not door.is_open:
+				door.set_barricade(true)
+				Sound.play("knock", 0.2, -2.0)
+				hud.toast("You nail the planks across the door. It will hold for a while.")
+		"first_aid":
+			if Survival.health(save) < Survival.max_health(save) and Survival.take_stock(save, "bandages"):
+				Survival.change_health(save, 30.0)
+				Survival.change_need(save, "stress", -4.0)
+				Sound.play("step", 0.1, -6.0)
+				hud.toast("You clean and bandage the wound.")
 		"shutters":
 			var closed := not bool(save["world"]["shutters_closed"])
 			save["world"]["shutters_closed"] = closed
@@ -650,13 +701,12 @@ func _burglar() -> void:
 	], Callable(), Color("#ff6a70"), 0.35)
 
 
+## You grab the bat from beside the bed, and he is in the room.
 func _burglar_fight(thief: Node3D) -> void:
-	Sound.play("knock", 0.1, 4.0)
-	horror._shake(0.5, 0.1)
-	hud.flash(Color(0.5, 0.0, 0.0, 0.55))
-	var result := Horror.fight_burglar(save, character.stat_value("endurance"), character.stat_value("vigilance"), _rng)
 	thief.queue_free()
-	_after_night(result["text"], true)
+	_set_busy(false)
+	fighter.set_weapon("bat")
+	horror.burglar_fight()
 
 
 func _burglar_let(thief: Node3D) -> void:
@@ -771,6 +821,26 @@ func set_feeds_live(on: bool) -> void:
 
 func on_computer_closed() -> void:
 	_set_busy(false)
+
+
+# Fighting ---------------------------------------------------------------------
+
+func _cycle_weapon() -> void:
+	if _busy or _dead or _paused:
+		return
+	fighter.cycle()
+
+
+## Something hurts you. cause: what the death screen says if it kills you.
+func hurt(amount: float, cause: String) -> void:
+	if _dead:
+		return
+	Survival.change_health(save, -Combat.taken(amount, character))
+	Survival.change_need(save, "stress", amount * 0.5)
+	hud.flash(Color(0.6, 0.0, 0.0, 0.45))
+	horror._shake(0.25, 0.06)
+	if Survival.health(save) <= 0.0:
+		_die(cause)
 
 
 # The church -------------------------------------------------------------------
