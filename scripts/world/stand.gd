@@ -149,12 +149,14 @@ func _hold(item: FoodItem) -> void:
 	else:
 		item.reparent(game.player.hand, false)
 	item.transform = Transform3D.IDENTITY
+	item.set_layer(TrailerWorld.LAYER_VIEWMODEL)
 
 
 func _drop_into(spot: FoodSpot) -> void:
 	var item := held
 	held = null
 	item.reparent(game.world, false)
+	item.set_layer(TrailerWorld.LAYER_WORLD)
 	spot.place(item)
 
 

@@ -2,7 +2,7 @@ class_name TrailerWorld
 extends Node3D
 ## The trailer and the street around it, built in code so the layout is easy to
 ## change. X runs along the trailer: kitchen from 0, storage from 3.5, home from
-## 6, bathroom from 9.4 to 11. Z runs across it, with the street side at 3.2.
+## 6, bathroom from 9 to 11. Z runs across it, with the street side at 3.2.
 ## The trailer floor is at 0 and the street is lower, at GROUND.
 
 const LENGTH := 11.0
@@ -10,7 +10,7 @@ const WIDTH := 3.2
 const HEIGHT := 2.4
 const GROUND := -0.45
 const OUTER := 0.12
-const ROOM_EDGES := [0.0, 3.5, 6.0, 9.4, 11.0]
+const ROOM_EDGES := [0.0, 3.5, 6.0, 9.0, 11.0]
 const SPAWN := Vector3(8.6, 0.05, 1.5)
 const SPAWN_YAW := PI / 2.0
 
@@ -19,6 +19,8 @@ const LAYER_WORLD := 1
 const LAYER_BODY := 2
 const LAYER_CCTV_ONLY := 4
 const LAYER_MIRROR := 8
+## Your own arm: seen only by your own eyes.
+const LAYER_VIEWMODEL := 16
 
 const NIGHT_SKY := Color("#07050b")
 const DAY_SKY := Color("#7d8088")
@@ -291,9 +293,9 @@ func set_daylight(amount: float) -> void:
 func _build_shell() -> void:
 	_span(Vector3(0.0, -0.06, 0.0), Vector3(3.5, 0.0, WIDTH), _m("floor_check"))
 	_span(Vector3(3.5, -0.06, 0.0), Vector3(6.0, 0.0, WIDTH), _m("floor_lino"))
-	_span(Vector3(6.0, -0.06, 0.0), Vector3(9.4, 0.0, WIDTH), _m("floor_planks"))
-	_span(Vector3(9.4, -0.06, 1.8), Vector3(LENGTH, 0.0, WIDTH), _m("floor_planks"))
-	_span(Vector3(9.4, -0.06, 0.0), Vector3(LENGTH, 0.0, 1.8), _m("floor_tiles"))
+	_span(Vector3(6.0, -0.06, 0.0), Vector3(9.0, 0.0, WIDTH), _m("floor_planks"))
+	_span(Vector3(9.0, -0.06, 1.8), Vector3(LENGTH, 0.0, WIDTH), _m("floor_planks"))
+	_span(Vector3(9.0, -0.06, 0.0), Vector3(LENGTH, 0.0, 1.8), _m("floor_tiles"))
 	_span(Vector3(4.4, -0.06, WIDTH), Vector3(5.3, 0.0, WIDTH + OUTER + 0.02), _m("floor_lino"))
 	for i in 4:
 		var a: float = ROOM_EDGES[i]
@@ -304,15 +306,15 @@ func _build_shell() -> void:
 		_span(Vector3(roof_a, HEIGHT + 0.05, -0.14), Vector3(roof_b, HEIGHT + 0.2, WIDTH + 0.14), _m("roof"))
 
 	var street_side := [[0.5, 3.0, 1.0, 1.9], [4.4, 5.3, 0.0, 2.0], [7.9, 8.7, 1.0, 1.75]]
-	_outer_wall(true, WIDTH, 1.0, [[0.0, 3.5, "wall_kitchen"], [3.5, 6.0, "wall_panel"], [6.0, 9.4, "wallpaper"], [9.4, LENGTH, "wallpaper"]], street_side)
-	_outer_wall(true, 0.0, -1.0, [[0.0, 3.5, "wall_kitchen"], [3.5, 6.0, "wall_panel"], [6.0, 9.4, "wallpaper"], [9.4, LENGTH, "wall_bath"]], [])
+	_outer_wall(true, WIDTH, 1.0, [[0.0, 3.5, "wall_kitchen"], [3.5, 6.0, "wall_panel"], [6.0, 9.0, "wallpaper"], [9.0, LENGTH, "wallpaper"]], street_side)
+	_outer_wall(true, 0.0, -1.0, [[0.0, 3.5, "wall_kitchen"], [3.5, 6.0, "wall_panel"], [6.0, 9.0, "wallpaper"], [9.0, LENGTH, "wall_bath"]], [])
 	_outer_wall(false, 0.0, -1.0, [[0.0, WIDTH, "wall_kitchen"]], [])
 	_outer_wall(false, LENGTH, 1.0, [[0.0, 1.8, "wall_bath"], [1.8, WIDTH, "wallpaper"]], [])
 
 	_partition(false, 3.5, 0.0, WIDTH, [[0.6, 2.6, 0.0, 2.1]], "wall_kitchen", "wall_panel")
 	_partition(false, 6.0, 0.0, WIDTH, [[1.15, 2.0, 0.0, 2.0]], "wall_panel", "wallpaper")
-	_partition(false, 9.4, 0.0, 1.8, [[0.55, 1.35, 0.0, 2.0]], "wallpaper", "wall_bath")
-	_partition(true, 1.8, 9.36, LENGTH, [], "wall_bath", "wallpaper")
+	_partition(false, 9.0, 0.0, 1.8, [[0.95, 1.75, 0.0, 2.0]], "wallpaper", "wall_bath")
+	_partition(true, 1.8, 8.96, LENGTH, [], "wall_bath", "wallpaper")
 
 	var entrance := Door.create(0.86, 1.98, _m("skin"), 0.0, -100.0)
 	entrance.position = Vector3(4.42, 0.0, WIDTH + 0.06)
@@ -321,7 +323,7 @@ func _build_shell() -> void:
 	home_door.position = Vector3(6.0, 0.0, 1.17)
 	add_child(home_door)
 	var bath_door := Door.create(0.76, 1.98, _c("#d4d0c4"), 90.0, 180.0)
-	bath_door.position = Vector3(9.4, 0.0, 1.33)
+	bath_door.position = Vector3(9.0, 0.0, 1.73)
 	add_child(bath_door)
 
 
@@ -586,6 +588,22 @@ func _build_bathroom() -> void:
 	_span(Vector3(10.975, 1.26, 1.53), Vector3(11.0, 1.94, 1.56), frame, false)
 	_span(Vector3(10.975, 1.26, 0.99), Vector3(11.0, 1.29, 1.56), frame, false)
 	_span(Vector3(10.975, 1.91, 0.99), Vector3(11.0, 1.94, 1.56), frame, false)
+	# Shower in the corner behind the door: a tray, a curtain on a rail, a head on the wall.
+	_span(Vector3(9.04, 0.0, 0.04), Vector3(9.92, 0.07, 0.92), _c("#d8d6cf"), false)
+	_span(Vector3(9.4, 0.071, 0.4), Vector3(9.56, 0.075, 0.56), _c("#5d6366"), false)
+	_span(Vector3(9.92, 2.02, 0.04), Vector3(9.94, 2.04, 0.94), _m("steel"), false)
+	_span(Vector3(9.04, 2.02, 0.92), Vector3(9.94, 2.04, 0.94), _m("steel"), false)
+	var curtain := _c("#7d8a6b")
+	_span(Vector3(9.91, 0.18, 0.04), Vector3(9.93, 2.02, 0.92), curtain, false)
+	_span(Vector3(9.04, 0.18, 0.91), Vector3(9.42, 2.02, 0.93), curtain, false)
+	for k in 8:
+		_span(Vector3(9.905, 0.18, 0.08 + k * 0.11), Vector3(9.935, 2.02, 0.1 + k * 0.11), _c("#66735a"), false)
+	_cyl(0.012, 0.6, Vector3(9.12, 1.75, 0.3), _m("steel"))
+	_box(Vector3(0.025, 0.025, 0.22), Vector3(9.15, 2.04, 0.2), _m("steel"), false, Vector3(-20.0, 0.0, 0.0))
+	_cyl(0.05, 0.03, Vector3(9.15, 2.0, 0.3), _m("steel"))
+	_span(Vector3(9.04, 1.0, 0.6), Vector3(9.07, 1.12, 0.7), _m("steel"), false)
+	_zone(Vector3(9.04, 0.0, 0.04), Vector3(9.9, 2.0, 0.9), "shower")
+
 	# Towel and light.
 	_span(Vector3(9.9, 1.0, 1.74), Vector3(10.3, 1.45, 1.76), _c("#3d5f7e"), false)
 	_lamp_mesh(_span(Vector3(10.0, 2.36, 0.85), Vector3(10.5, 2.4, 0.95), _g("#dfeef5"), false))

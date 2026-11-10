@@ -4,6 +4,8 @@ extends Node3D
 ## cans and sauce bottles. Drawn from simple shapes that sit on their origin.
 
 var data: Dictionary
+## Render layer of its shapes: the world when it sits somewhere, your own view in your hand.
+var layer := 1
 var _shown := ""
 
 
@@ -12,6 +14,13 @@ static func create(kind: String) -> FoodItem:
 	item.data = StandRules.new_item(kind)
 	item.refresh(0)
 	return item
+
+
+func set_layer(value: int) -> void:
+	layer = value
+	for child in get_children():
+		if child is MeshInstance3D:
+			(child as MeshInstance3D).layers = value
 
 
 func describe(cooking: int) -> String:
@@ -79,6 +88,7 @@ func _box(size: Vector3, at: Vector3, colour: Color) -> void:
 	mesh.position = at
 	mesh.material_override = TextureFactory.plain(colour, 0.7)
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh.layers = layer
 	add_child(mesh)
 
 
@@ -94,4 +104,5 @@ func _cyl(radius: float, height: float, at: Vector3, colour: Color, top_radius :
 	mesh.position = at
 	mesh.material_override = TextureFactory.plain(colour, 0.7)
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh.layers = layer
 	add_child(mesh)

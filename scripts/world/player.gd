@@ -16,7 +16,8 @@ const BODY_PIXEL_SIZE := 0.0056
 var camera: Camera3D
 var flashlight: SpotLight3D
 var body_sprite: Sprite3D
-## Where held items sit, in front of the camera.
+## Your arm, and the palm where held items sit.
+var arm: FirstPersonArm
 var hand: Node3D
 var move_input := Vector2.ZERO
 var controls_enabled := true
@@ -45,10 +46,9 @@ func _init() -> void:
 	camera.cull_mask = 0xFFFFF & ~(TrailerWorld.LAYER_BODY | TrailerWorld.LAYER_CCTV_ONLY)
 	add_child(camera)
 
-	hand = Node3D.new()
-	hand.position = Vector3(0.2, -0.2, -0.42)
-	hand.rotation_degrees = Vector3(15.0, -20.0, 0.0)
-	camera.add_child(hand)
+	arm = FirstPersonArm.new()
+	camera.add_child(arm)
+	hand = arm.palm
 
 	flashlight = SpotLight3D.new()
 	flashlight.spot_range = 14.0
@@ -106,6 +106,7 @@ func _physics_process(delta: float) -> void:
 			_step = 0.0
 			stepped.emit()
 	camera.position.y = EYE_HEIGHT + sin(_bob) * 0.025 * minf(speed / SPEED, 1.0)
+	arm.sway(_bob, minf(speed / SPEED, 1.0))
 	_update_focus()
 
 
