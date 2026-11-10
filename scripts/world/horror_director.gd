@@ -28,15 +28,105 @@ func setup(owner_game: TrailerGame) -> void:
 
 func tick(delta: float, busy: bool, in_church: bool) -> void:
 	_update_watchers(delta)
+	_update_fight()
 	if busy:
 		return
 	_minutes += delta * Survival.MINUTES_PER_SECOND
 	if _minutes < Horror.ROLL_MINUTES:
 		return
 	_minutes = 0.0
+	if fighting() or in_church:
+		return
+	var gang := Combat.roll_gang(game.save, _rng)
+	if gang > 0:
+		start_gang(gang)
+		return
+	var hunt := Combat.roll_hunt(game.save, _rng)
+	if hunt > 0:
+		start_hunt(hunt)
+		return
 	var event := Horror.roll(game.save, _rng, context(in_church))
 	if not event.is_empty():
 		run(event)
+
+
+# Fights -----------------------------------------------------------------------
+
+var _fight := ""
+
+
+func fighting() -> bool:
+	return not _fight.is_empty()
+
+
+func _spawn(kind: String, at: Vector3) -> Enemy:
+	var enemy := Enemy.create(game, kind)
+	game.world.add_child(enemy)
+	enemy.global_position = at
+	enemy.down.connect(_on_down)
+	return enemy
+
+
+## A gang comes up the street at night.
+func start_gang(count: int) -> void:
+	_fight = "gang"
+	for kind: String in Combat.gang_members(count, _rng):
+		_spawn(kind, Vector3(_rng.randf_range(-2.0, 11.0), TrailerWorld.GROUND, _rng.randf_range(11.0, 14.0)))
+	Sound.play("tempt", 0.0, -10.0)
+	game.hud.toast("Figures in hoods are coming up the street toward the trailer. Some are carrying something. Shut the door, or get ready.")
+
+
+## Civic enforcement drones come for you.
+func start_hunt(count: int) -> void:
+	_fight = "hunt"
+	for i in count:
+		_spawn("drone", Vector3(_rng.randf_range(-4.0, 13.0), TrailerWorld.GROUND + 5.0, _rng.randf_range(10.0, 15.0)))
+	Sound.play("siren", 0.0, -8.0)
+	Sound.play("civic_drone", 0.0, 0.0)
+	game.hud.toast("Civic Link: your account is flagged for irregular assembly. Enforcement drones dispatched. Cooperation is advised.")
+
+
+## You chose to fight the burglar: he is in the room.
+func burglar_fight() -> void:
+	_fight = "burglar"
+	_spawn("burglar", Vector3(8.3, 0.05, 2.75))
+	game.hud.toast("You grab the bat from beside the bed.")
+
+
+func _on_down(enemy: Enemy) -> void:
+	var loot := Combat.loot(enemy.kind, _rng)
+	if loot > 0:
+		game.save["survival"]["money"] = Survival.money(game.save) + loot
+		game.hud.toast("He goes down. %d credits fall out of his jacket." % loot)
+	elif enemy.kind == "drone":
+		game.hud.toast("The drone drops, sparking.")
+	elif enemy.kind == "burglar":
+		game.hud.toast("He scrambles back out through the window and is gone.")
+
+
+func _update_fight() -> void:
+	if _fight.is_empty():
+		return
+	var left := get_tree().get_nodes_in_group("enemies")
+	for node in left:
+		var enemy := node as Enemy
+		if enemy.kind == "drone" and enemy.gave_up():
+			enemy.remove_from_group("enemies")
+			var tween := enemy.create_tween()
+			tween.tween_property(enemy, "global_position:y", 30.0, 3.0)
+			tween.tween_callback(enemy.queue_free)
+	if not get_tree().get_nodes_in_group("enemies").is_empty():
+		return
+	match _fight:
+		"gang":
+			game.hud.toast("The last of them runs. The street is quiet again.")
+			Survival.change_need(game.save, "stress", -10.0)
+		"hunt":
+			game.hud.toast("The sky is empty. Civic Link will remember this.")
+			Survival.change_lean(game.save, -1)
+		"burglar":
+			game._after_night("You fought him off. He is gone, and so is your sleep.", true)
+	_fight = ""
 
 
 func context(in_church: bool) -> Dictionary:

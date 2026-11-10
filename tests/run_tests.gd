@@ -36,6 +36,7 @@ func _initialize() -> void:
 	_test_scripts_compile()
 	_test_scare_pacing()
 	_test_night()
+	_test_combat_rules()
 	_clean()
 	print("FAILURES: %d" % failures)
 	quit(1 if failures > 0 else 0)
@@ -774,3 +775,74 @@ func _test_night() -> void:
 		if Horror.night(faithful, rng, true, 480.0).get("id", "") == "paralysis":
 			wakings += 1
 	_check(wakings == 0, "no demonic waking for the faithful")
+
+
+func _test_combat_rules() -> void:
+	var save := _new_save()
+	_check(Combat.next("") == "bat" and Combat.next("bat") == "slingshot" and Combat.next("slingshot") == "", "weapon cycle")
+	var crack := PlayerCharacter.from_dict(save["character"])
+	var poor := PlayerCharacter.from_dict(save["character"])
+	crack.free_points["marksmanship"] = 8
+	poor.free_points["marksmanship"] = 0
+	_check(Combat.spread(crack) < Combat.spread(poor), "marksmanship tightens the slingshot")
+	_check(Combat.damage("slingshot", crack) > Combat.damage("slingshot", poor), "marksmanship hits harder")
+	_check(Combat.aim_spread(crack, 90.0) > Combat.aim_spread(crack, 0.0), "stress shakes your aim")
+	var strong := PlayerCharacter.from_dict(save["character"])
+	strong.free_points["endurance"] = 8
+	poor.free_points["endurance"] = 0
+	_check(Combat.damage("bat", strong) > Combat.damage("bat", poor), "endurance swings harder")
+	_check(Combat.taken(10.0, strong) < Combat.taken(10.0, poor), "endurance takes it better")
+	_check(Survival.stock(save, "shot") > 0 and Survival.stock(save, "bandages") > 0, "start with shot and bandages")
+	_check("shooter" in Combat.RANGED and "drone" in Combat.RANGED and not "thug" in Combat.RANGED, "who can hurt you from range")
+	# Gangs: night only, not in the first two days, with some shooters.
+	var rng := _rng(4)
+	_check(Combat.roll_gang(save, rng) == 0, "no gang on the first night")
+	var later := _new_save()
+	later["survival"]["money"] = 300
+	later["world"]["time"] = float(later["world"]["time"]) + 3 * Survival.DAY + 6 * 60.0
+	var gangs := 0
+	for i in 400:
+		later["horror"]["next_gang"] = 0.0
+		if Combat.roll_gang(later, rng) > 0:
+			gangs += 1
+	_check(gangs > 10 and gangs < 120, "gangs come some nights: %d of 400" % gangs)
+	var members := Combat.gang_members(5, _rng(1))
+	_check(members[0] == "thug" and members.size() == 5, "a gang always has someone to break in")
+	# The state: hunts for the faithful, stopped by paying.
+	var faithful := _new_save()
+	faithful["soul"]["horror_lean"] = -50
+	faithful["survival"]["stress"] = 60.0
+	faithful["world"]["time"] = float(faithful["world"]["time"]) + 3 * Survival.DAY + 6 * 60.0
+	var hunts := 0
+	for i in 400:
+		faithful["horror"]["next_hunt"] = 0.0
+		if Combat.roll_hunt(faithful, rng) > 0:
+			hunts += 1
+	_check(hunts > 5, "drones hunt the faithful: %d of 400" % hunts)
+	var sinner := _new_save()
+	sinner["soul"]["horror_lean"] = 40
+	sinner["world"]["time"] = float(sinner["world"]["time"]) + 3 * Survival.DAY
+	var none := 0
+	for i in 200:
+		sinner["horror"]["next_hunt"] = 0.0
+		none += Combat.roll_hunt(sinner, rng)
+	_check(none == 0, "the state does not hunt sinners")
+	faithful["survival"]["money"] = 500
+	var price := Combat.compliance_price(faithful)
+	_check(price > Combat.compliance_price(sinner), "the faithful pay more to be left alone")
+	_check(Combat.pay_compliance(faithful) == "" and Survival.money(faithful) == 500 - price, "pay the contribution")
+	_check(Combat.compliant(faithful), "left alone after paying")
+	var quiet := 0
+	for i in 400:
+		faithful["horror"]["next_hunt"] = 0.0
+		quiet += Combat.roll_hunt(faithful, rng)
+	_check(quiet == 0, "no drone hunts while compliant")
+	var context := {"in_church": false, "near_mirror": false, "hatch_open": true, "customers": true, "shutters_closed": false}
+	var state_events := 0
+	for i in 400:
+		var event := Horror.roll(faithful, rng, context)
+		if not event.is_empty() and event["side"] == "state":
+			state_events += 1
+	_check(state_events == 0, "no state events while compliant")
+	Survival.advance(faithful, Combat.COMPLIANCE_DAYS * Survival.DAY + 10.0)
+	_check(not Combat.compliant(faithful), "compliance runs out")

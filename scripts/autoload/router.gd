@@ -17,6 +17,7 @@ const KEYS := {
 	"flashlight": [KEY_F],
 	"plan_day": [KEY_C],
 	"use_hand": [KEY_Q],
+	"weapon": [KEY_R],
 }
 
 

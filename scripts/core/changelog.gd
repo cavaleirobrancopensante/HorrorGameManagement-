@@ -5,6 +5,20 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.9.0", "date": "10 Nov 2026", "title": "Fight back",
+		"changes": [
+			"A bat and a slingshot. R (or the Arm button on phones, or the mouse wheel) cycles bat, slingshot, empty hands. With a weapon out, use swings or shoots.",
+			"The slingshot fires steel shot (sold on the computer) through the window, the hatch or the open door. Marksmanship tightens its spread and adds damage; stress shakes your aim. Endurance puts weight behind the bat and softens the blows you take.",
+			"Gangs: some nights a gang comes up the street. Thugs break down your door; shooters hurt you from range through any open window or hatch. Beaten, they drop a few credits.",
+			"Civic enforcement drones hunt the faithful. They zap you through any opening, and come in through an open door.",
+			"Closing the shutters and the hatch takes range away from both sides: nobody can shoot in and you cannot shoot out, so they have to break in and fight you up close. Drones ram the shutter or the door; thugs bash the door.",
+			"The Standing tab on the computer: your account standing with the state, and a compliance contribution that keeps inspections, surcharges, drones and raids away for three days. The more faithful you look, the more it costs.",
+			"Barricade the door: nail the planks from the freezer lid across it. It takes three times the bashing; the planks give first, then the door. Take them down to go out.",
+			"Fight the night burglar for real, with the bat from beside the bed.",
+			"A first aid box in the bathroom, and bandages in the shop.",
+		],
+	},
+	{
 		"version": "0.8.0", "date": "10 Nov 2026", "title": "The night",
 		"changes": [
 			"A roller shutter on the home window. Closed, nothing can watch you through it, and most burglars give up at it: you find pry marks in the morning.",

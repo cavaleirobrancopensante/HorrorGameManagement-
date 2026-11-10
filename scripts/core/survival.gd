@@ -54,6 +54,7 @@ static func ensure(save: Dictionary) -> void:
 		save["soul"] = {"state_of_grace": true, "horror_lean": 0}
 	Soul.ensure(save)
 	Horror.ensure(save)
+	Combat.ensure(save)
 	if not (save.get("survival") is Dictionary):
 		var character := PlayerCharacter.from_dict(save.get("character", {}))
 		var survival := {

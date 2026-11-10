@@ -80,10 +80,12 @@ const PRODUCTS := [
 	{"id": "mayo", "name": "Mayonnaise refill", "pack": "2 refills", "units": 2, "price": 5, "desc": "Fills the mayonnaise bottle."},
 	{"id": "cleaner", "name": "Cleaning spray", "pack": "Bottle for 20 wipes", "units": 20, "price": 5, "desc": "Customers refuse food from a filthy counter."},
 	{"id": "candles", "name": "Candles", "pack": "Pack of 3", "units": 3, "price": 4, "desc": "For prayer at home."},
+	{"id": "shot", "name": "Steel shot", "pack": "Bag of 20", "units": 20, "price": 3, "desc": "Ammunition for the slingshot."},
+	{"id": "bandages", "name": "Bandages", "pack": "Box of 3", "units": 3, "price": 6, "desc": "For the first aid box in the bathroom. Each heals a wound."},
 ]
 const STARTING_STOCK := {
 	"sausages": 12, "patties": 8, "buns": 18, "soda": 8, "meals": 2, "coffee": 3, "candles": 1,
-	"ketchup": 1, "mustard": 1, "mayo": 1, "cleaner": 10,
+	"ketchup": 1, "mustard": 1, "mayo": 1, "cleaner": 10, "shot": 15, "bandages": 2,
 }
 
 ## Bought once, delivered like stock, installed when you carry them in.

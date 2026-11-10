@@ -29,6 +29,16 @@ var action := ""
 var _sway := Vector3.ZERO
 var _tween: Tween
 var _materials: Array[StandardMaterial3D] = []
+## The weapon in your hand: "", "bat" or "slingshot".
+var weapon := ""
+var _weapon_model: Node3D
+
+const SWING_UP := Vector3(0.32, -0.12, -0.05)
+const SWING_UP_TURN := Vector3(30.0, -30.0, 50.0)
+const SWING_DOWN := Vector3(-0.1, -0.35, -0.35)
+const SWING_DOWN_TURN := Vector3(-40.0, 40.0, -30.0)
+const AIM := Vector3(0.05, -0.2, -0.25)
+const AIM_TURN := Vector3(4.0, 2.0, 0.0)
 
 
 func _init() -> void:
@@ -93,7 +103,84 @@ func to_mouth(then: Callable) -> void:
 
 
 func _rest_pose() -> Vector3:
-	return REST if holding else LOWERED
+	if weapon == "slingshot":
+		return AIM
+	return REST if holding or weapon != "" else LOWERED
+
+
+## Takes a weapon in hand, or puts it away ("").
+func set_weapon(id: String) -> void:
+	weapon = id
+	if _weapon_model != null:
+		_weapon_model.queue_free()
+		_weapon_model = null
+	if id != "":
+		_weapon_model = _bat() if id == "bat" else _slingshot()
+		palm.add_child(_weapon_model)
+	if _tween:
+		_tween.kill()
+	_busy = false
+	_settle()
+
+
+func swing(then: Callable) -> void:
+	action = "swing"
+	_play([[SWING_UP, SWING_UP_TURN, 0.12], [SWING_DOWN, SWING_DOWN_TURN, 0.1]], then, [REST, REST_TURN, 0.25])
+
+
+func shoot(then: Callable) -> void:
+	action = "shoot"
+	_play([[AIM + Vector3(0.0, 0.0, 0.08), AIM_TURN, 0.12], [AIM - Vector3(0.0, 0.0, 0.04), AIM_TURN, 0.05]], then, [AIM, AIM_TURN, 0.2])
+
+
+func _bat() -> Node3D:
+	var bat := Node3D.new()
+	var wood := _mat(Color("#8a5a32"))
+	var grip := _mat(Color("#1e1b1a"))
+	var handle := _piece(CylinderMesh.new(), 0.018, 0.018, 0.22, grip)
+	handle.position = Vector3(0.0, 0.05, 0.0)
+	bat.add_child(handle)
+	var barrel := _piece(CylinderMesh.new(), 0.04, 0.022, 0.5, wood)
+	barrel.position = Vector3(0.0, 0.41, 0.0)
+	bat.add_child(barrel)
+	bat.rotation_degrees = Vector3(-60.0, 0.0, 0.0)
+	return bat
+
+
+func _slingshot() -> Node3D:
+	var sling := Node3D.new()
+	var wood := _mat(Color("#6b4426"))
+	var band := _mat(Color("#7a2a22"))
+	var handle := _piece(CylinderMesh.new(), 0.014, 0.016, 0.12, wood)
+	handle.position = Vector3(0.0, 0.0, 0.0)
+	sling.add_child(handle)
+	for side in [-1.0, 1.0]:
+		var fork := _piece(CylinderMesh.new(), 0.011, 0.012, 0.09, wood)
+		fork.position = Vector3(side * 0.03, 0.09, 0.0)
+		fork.rotation_degrees.z = -side * 20.0
+		sling.add_child(fork)
+		var rubber := _piece(BoxMesh.new(), 0.006, 0.006, 0.09, band)
+		rubber.position = Vector3(side * 0.025, 0.13, 0.045)
+		rubber.rotation_degrees.x = 90.0
+		sling.add_child(rubber)
+	sling.position = Vector3(0.0, 0.03, -0.03)
+	return sling
+
+
+func _piece(mesh: PrimitiveMesh, a: float, b: float, length: float, material: StandardMaterial3D) -> MeshInstance3D:
+	if mesh is CylinderMesh:
+		(mesh as CylinderMesh).top_radius = a
+		(mesh as CylinderMesh).bottom_radius = b
+		(mesh as CylinderMesh).height = length
+		(mesh as CylinderMesh).radial_segments = 8
+	elif mesh is BoxMesh:
+		(mesh as BoxMesh).size = Vector3(a, length, b)
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.material_override = material
+	node.layers = TrailerWorld.LAYER_VIEWMODEL
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return node
 
 
 func _play(steps: Array, then: Callable, after: Array = []) -> void:
@@ -122,20 +209,22 @@ func _play(steps: Array, then: Callable, after: Array = []) -> void:
 func _settle() -> void:
 	if _tween and _tween.is_running() and _busy:
 		return
-	visible = holding
-	position = (REST if holding else LOWERED) + _sway
-	rotation_degrees = REST_TURN
+	visible = holding or weapon != ""
+	position = _rest_pose() + _sway
+	rotation_degrees = AIM_TURN if weapon == "slingshot" else REST_TURN
 
 
 ## A little movement with each step while walking.
 func sway(bob: float, amount: float) -> void:
 	_sway = Vector3(sin(bob * 0.5) * 0.012, -absf(sin(bob)) * 0.014, 0.0) * amount
-	if holding and not _busy:
-		position = REST + _sway
+	if (holding or weapon != "") and not _busy:
+		position = _rest_pose() + _sway
 
 
 ## The pose for the body sprite: "reach", "eat", "hold" or "rest".
 func pose() -> String:
 	if not action.is_empty():
 		return action
+	if weapon != "":
+		return weapon
 	return "hold" if holding else "rest"

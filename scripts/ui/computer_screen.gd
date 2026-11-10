@@ -74,7 +74,7 @@ func _build() -> void:
 	var title := UiKit.label("Civic Link", 30, PHOSPHOR)
 	title.custom_minimum_size.x = 180
 	header.add_child(title)
-	for tab: Array in [["cameras", "Cameras"], ["shop", "Shop"], ["news", "News"]]:
+	for tab: Array in [["cameras", "Cameras"], ["shop", "Shop"], ["news", "News"], ["civic", "Standing"]]:
 		var button := _screen_button(tab[1], show_tab.bind(tab[0]))
 		button.custom_minimum_size.x = 150
 		header.add_child(button)
@@ -124,6 +124,8 @@ func show_tab(tab: String) -> void:
 			_build_shop()
 		"news":
 			_build_news()
+		"civic":
+			_build_civic()
 	_update_live()
 
 
@@ -314,6 +316,46 @@ func _order(id: String) -> void:
 
 
 # News -------------------------------------------------------------------------
+
+## Your standing with the state, and what it costs to be left alone.
+func _build_civic() -> void:
+	var lean := float(game.save["soul"]["horror_lean"])
+	var level := Horror.intensity(game.save, "state")
+	var standing := "Cooperative" if level < 0.2 else ("Under review" if level < 0.45 else ("Flagged: irregular assembly" if level < 0.7 else "Priority enforcement"))
+	_content.add_child(UiKit.label("Account standing: %s" % standing, 30, PHOSPHOR))
+	var note := "Faith-affiliated activity raises your profile with the Civic Link. Flagged accounts receive inspections, surcharges, camera supervision and, at night, enforcement drones and raids."
+	if lean > 0.0:
+		note += " Your account currently attracts little state attention."
+	_content.add_child(UiKit.wrapped_label(note, 22, DIM))
+	var state := UiKit.label("", 24, PHOSPHOR)
+	_content.add_child(state)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	var text := UiKit.wrapped_label("Voluntary compliance contribution. Your account is classified as cooperative for %d days: no inspections, surcharges, supervision, drones or raids." % int(Combat.COMPLIANCE_DAYS), 22, PHOSPHOR)
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(text)
+	var price := UiKit.label("", 24, PHOSPHOR)
+	price.custom_minimum_size.x = 130
+	row.add_child(price)
+	var pay := _screen_button("Pay", func() -> void:
+		var problem := Combat.pay_compliance(game.save)
+		if problem.is_empty():
+			Sound.play("till")
+			game.hud.toast("Civic Link: thank you for your cooperation.")
+		else:
+			game.hud.toast(problem)
+		_update_live())
+	pay.custom_minimum_size.x = 130
+	row.add_child(pay)
+	_content.add_child(row)
+	_live_labels.append(func() -> void:
+		var until := float(game.save["horror"]["compliance_until"])
+		var now := Survival.now(game.save)
+		state.text = ("Cooperative until %s" % Survival.date_text(until)) if now < until else "No contribution on record."
+		price.text = "%d credits" % Combat.compliance_price(game.save)
+		pay.disabled = Survival.money(game.save) < Combat.compliance_price(game.save)
+	)
+
 
 func _build_news() -> void:
 	var day := Survival.day_of(Survival.now(game.save))
