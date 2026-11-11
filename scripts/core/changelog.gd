@@ -5,6 +5,17 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.11.0", "date": "11 Nov 2026", "title": "Easier start",
+		"changes": [
+			"Character creation rebuilt: four clear steps with a progress bar, a sentence saying what each step is for, and big Back, Randomize this step and Next buttons.",
+			"Your character stands beside you in 3D as you build them. Drag to turn them around.",
+			"Choose your face, top, trousers and shoes separately from the outfit parts, plus a colour for your top. What you pick is what you see in the mirror and on the cameras.",
+			"Temperaments are shown as cards with what each is good at and what tempts it. The conscience grid has a legend and says in words what each choice does.",
+			"Tooltips on the main menu and in creation: point at anything, or touch it on a phone, and a line explains it.",
+			"In the game, hold the crosshair on something for a moment and a tooltip says what it is and what it does: food shows how cooked it is, sauces how much is left, customers what they want and how they feel, enemies their health. Look away and it goes.",
+		],
+	},
+	{
 		"version": "0.10.0", "date": "11 Nov 2026", "title": "Real people",
 		"changes": [
 			"Every person is now a 3D model instead of a flat cut-out: customers, thugs, shooters, the burglar, Father Columba, the informant, the inspector, and you in the mirror and on the cameras.",

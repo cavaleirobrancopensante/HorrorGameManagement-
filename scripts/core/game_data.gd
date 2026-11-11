@@ -279,7 +279,37 @@ const APPEARANCE := [
 		["white", "White"], ["butcher", "Butcher red"], ["navy", "Navy"],
 		["mustard", "Mustard"], ["black", "Black"],
 	]},
+	# The 3D body. Faces and clothes depend on sex: see options_for().
+	{"id": "head", "label": "Face", "options": [["Casual", "Face 1"]]},
+	{"id": "top", "label": "Top", "options": [["Casual2", "T-shirt"]]},
+	{"id": "legs", "label": "Trousers", "options": [["Casual", "Jeans"]]},
+	{"id": "feet", "label": "Shoes", "options": [["Casual", "Trainers"]]},
+	{"id": "top_colour", "label": "Top colour", "options": [
+		["charcoal", "Charcoal"], ["navy", "Navy"], ["brown", "Brown"], ["green", "Bottle green"],
+		["maroon", "Maroon"], ["grey", "Grey"], ["mustard", "Mustard"], ["cream", "Cream"], ["as_made", "As made"],
+	]},
 ]
+
+const TOP_COLOURS := {
+	"charcoal": "#4b4a55", "navy": "#2a344f", "brown": "#4a3b32", "green": "#2f4a3a",
+	"maroon": "#5a2f2f", "grey": "#6b6b70", "mustard": "#7a6a4a", "cream": "#a49c8a",
+}
+
+## The body parts you can wear, by sex: [outfit file, name for each part].
+const BODY_PARTS := {
+	"man": {
+		"head": ["Casual", "Casual2", "Suit", "Punk", "Adventurer", "Worker", "Farmer"],
+		"top": [["Casual2", "T-shirt"], ["Casual", "Jumper"], ["Adventurer", "Outdoor jacket"], ["Worker", "Hi-vis vest"], ["Farmer", "Work shirt"], ["Suit", "Suit jacket"], ["Punk", "Punk vest"]],
+		"legs": [["Casual", "Jeans"], ["Casual2", "Light jeans"], ["Suit", "Suit trousers"], ["Worker", "Work trousers"], ["Farmer", "Overalls"], ["Adventurer", "Cargo trousers"], ["Punk", "Ripped jeans"]],
+		"feet": [["Casual", "Trainers"], ["Casual2", "White trainers"], ["Suit", "Dress shoes"], ["Worker", "Work boots"], ["Farmer", "Wellies"], ["Adventurer", "Hiking boots"], ["Punk", "Combat boots"]],
+	},
+	"woman": {
+		"head": ["Casual", "Formal", "Suit", "Punk", "Adventurer", "Worker", "SciFi", "Soldier"],
+		"top": [["Casual", "T-shirt"], ["Formal", "Blouse"], ["Suit", "Suit jacket"], ["Adventurer", "Outdoor jacket"], ["Worker", "Hi-vis vest"], ["SciFi", "Techwear"], ["Punk", "Punk top"]],
+		"legs": [["Casual", "Trousers"], ["Formal", "Skirt"], ["Suit", "Suit trousers"], ["Adventurer", "Cargo trousers"], ["Worker", "Work trousers"], ["SciFi", "Techwear"], ["Punk", "Punk trousers"]],
+		"feet": [["Casual", "Sandals"], ["Formal", "Heels"], ["Suit", "Dress shoes"], ["Adventurer", "Boots"], ["Worker", "Work boots"], ["SciFi", "Tech boots"], ["Punk", "Combat boots"]],
+	},
+}
 
 const NAMES_MAN := [
 	"Anselm", "Tomás", "Benedict", "Sebastian", "Patrick", "Joaquim",
@@ -326,7 +356,23 @@ static func upgrade_def(id: String) -> Dictionary:
 	return _find(UPGRADES, id)
 
 
-static func option_name(appearance_id: String, option_id: String) -> String:
+## The choices for one part of your looks. Faces and clothes depend on sex.
+static func options_for(appearance_id: String, sex: String) -> Array:
+	var parts: Dictionary = BODY_PARTS.get(sex, BODY_PARTS["man"])
+	if appearance_id == "head":
+		var faces := []
+		for i in parts["head"].size():
+			faces.append([parts["head"][i], "Face %d" % (i + 1)])
+		return faces
+	if parts.has(appearance_id):
+		return parts[appearance_id]
+	return appearance_def(appearance_id)["options"]
+
+
+static func option_name(appearance_id: String, option_id: String, sex := "man") -> String:
+	for option: Array in options_for(appearance_id, sex):
+		if option[0] == option_id:
+			return option[1]
 	for option: Array in appearance_def(appearance_id)["options"]:
 		if option[0] == option_id:
 			return option[1]

@@ -72,6 +72,9 @@ static func build_theme() -> Theme:
 	theme.set_color("font_placeholder_color", "LineEdit", Color(ASH, 0.7))
 
 	theme.set_stylebox("panel", "PanelContainer", flat_box(Color(COMPLINE, 0.94), VESTMENT_LIGHT, 2, 16))
+	theme.set_stylebox("panel", "TooltipPanel", flat_box(Color(COMPLINE, 0.96), LITURGICAL_GOLD, 2, 10))
+	theme.set_color("font_color", "TooltipLabel", TALLOW)
+	theme.set_font_size("font_size", "TooltipLabel", SIZE_SMALL)
 
 	var slider_track := flat_box(VESTMENT_LIGHT)
 	slider_track.content_margin_top = 8
@@ -124,6 +127,38 @@ static func button(text: String, action: Callable = Callable(), min_width: int =
 	if action.is_valid():
 		node.pressed.connect(action)
 	return node
+
+
+## Where tooltips go on screens without a mouse: the help line of the
+## current screen, if it has one.
+static var help_target := Callable()
+
+
+## Gives a control a tooltip. With a mouse it shows when you point at it; on a
+## touch screen, touching or focusing the control puts it in the help line.
+static func tip(node: Control, text: String) -> Control:
+	node.tooltip_text = text
+	node.focus_entered.connect(func() -> void: _help(text))
+	node.mouse_entered.connect(func() -> void: _help(text))
+	if node is BaseButton:
+		(node as BaseButton).button_down.connect(func() -> void: _help(text))
+	return node
+
+
+static func _help(text: String) -> void:
+	if help_target.is_valid():
+		help_target.call(text)
+
+
+## A line along the bottom of a screen that explains whatever you last
+## pointed at or touched. Shows default_text when nothing has been touched.
+static func help_line(default_text: String) -> Label:
+	var line := wrapped_label(default_text, SIZE_SMALL, ASH)
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	help_target = func(text: String) -> void:
+		if is_instance_valid(line):
+			line.text = text
+	return line
 
 
 ## Gives one button a fixed fill, used to show which choice is selected.

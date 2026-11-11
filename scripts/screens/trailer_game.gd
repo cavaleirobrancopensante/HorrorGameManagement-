@@ -35,6 +35,10 @@ var _body_prop: Node3D
 var _body_look := ""
 ## Game minutes since the last roll for a temptation.
 var _tempt_minutes := 0.0
+## What the crosshair has rested on, and for how long: tooltips wait a moment.
+var _tip_target: Object = null
+var _tip_wait := 0.0
+const TIP_DELAY := 0.65
 ## Stages the demonic and the state, from the state of your soul.
 var horror: HorrorDirector
 ## Your bat and slingshot.
@@ -218,6 +222,7 @@ func _process(delta: float) -> void:
 		hud.set_holding("" if _busy else stand.held_text(), stand.can_eat_held())
 		touch.arm_label = "Arm"
 	hud.set_step("" if _busy else stand.hint())
+	_update_tip(target, delta)
 	player.arm.holding = stand.held != null
 	_update_body_pose()
 	hud.bubbles = [] if _busy else stand.bubbles(player.camera, float(Settings.pixel_scale))
@@ -837,6 +842,79 @@ func set_feeds_live(on: bool) -> void:
 
 func on_computer_closed() -> void:
 	_set_busy(false)
+
+
+# Tooltips ---------------------------------------------------------------------
+
+## Holding the crosshair on something for a moment shows what it is.
+func _update_tip(target: Interactable, delta: float) -> void:
+	var looked: Object = target
+	if looked == null:
+		var collider: Object = player.aim.get("collider")
+		if collider is Enemy:
+			looked = collider
+	if _busy or looked != _tip_target:
+		_tip_target = null if _busy else looked
+		_tip_wait = 0.0
+		hud.set_tip("", "")
+		return
+	if looked == null:
+		return
+	_tip_wait += delta
+	if _tip_wait < TIP_DELAY:
+		return
+	var tip := _tip_for(looked)
+	hud.set_tip(tip[0] if tip.size() > 0 else "", tip[1] if tip.size() > 1 else "")
+
+
+## [title, text] for whatever the crosshair rests on, or [] for nothing to say.
+func _tip_for(looked: Object) -> Array:
+	if looked is Enemy:
+		var enemy := looked as Enemy
+		var tip: Array = Tips.ENEMIES.get(enemy.kind, []).duplicate()
+		if not tip.is_empty() and not enemy.is_down:
+			tip[1] = "%s\nHealth: %d%%" % [tip[1], roundi(enemy.health / float(enemy.stats["health"]) * 100.0)]
+		return tip
+	var target := looked as Interactable
+	match target.id:
+		"item":
+			var item: FoodItem = target.get_meta("item")
+			var data := item.data
+			var lines: PackedStringArray = []
+			if StandRules.is_sauce(data):
+				lines.append("%d portions left. With food in your hand, look at the bottle to add sauce." % int(data["left"]))
+				if int(data["left"]) <= 0:
+					lines.append("Empty: use it to refill from stock.")
+			elif data["kind"] in StandRules.MEATS:
+				var state := StandRules.cook_state(data, character.stat_value("cooking"), Survival.has_upgrade(save, "grill"))
+				lines.append({"raw": "Raw. Cook it on the grill.", "cooked": "Cooked. Put it in a roll before it burns.", "burnt": "Burnt. Bin it."}[state])
+			elif data["kind"] in StandRules.FOODS:
+				lines.append("Ready to hand over, if it matches an order.")
+			elif data["kind"] == "bun":
+				lines.append("Add cooked meat to make a hot dog or a burger.")
+			if data.get("dirty", false):
+				lines.append("Dirty: every customer will refuse it.")
+			elif data.get("odd", false):
+				lines.append("It sat somewhere food does not belong. Customers will mind.")
+			var title := item.describe(character.stat_value("cooking"))
+			return [title.left(1).to_upper() + title.substr(1), "\n".join(lines)]
+		"surface":
+			var surface := target as Surface
+			var dirt := float(save["world"]["dirt"].get(surface.key, 0.0))
+			var state := "Clean." if dirt < 0.08 else ("Greasy. Wipe it with cleaning spray soon." if dirt < Surface.DIRTY else "Filthy. Food put here will be refused. Wipe it now.")
+			var what := "Meat cooks wherever it sits on it." if surface.kind == "grill" else "Food belongs here; customers mind it anywhere else."
+			return [surface.label.left(1).to_upper() + surface.label.substr(1), "%s\n%s" % [what, state]]
+		"customer":
+			var customer: Customer = target.get_meta("customer")
+			var feeling: String = {"happy": "Happy", "neutral": "Getting impatient", "angry": "Angry"}[StandRules.face(customer.mood)]
+			return ["Customer", "Wants: %s.\n%s. The sooner you serve them, the bigger the tip." % [StandRules.order_text(customer.order).replace("\n", " "), feeling]]
+		"door":
+			var door: Door = target.get_meta("door")
+			if door == world.entrance:
+				var state := "Barricaded." if door.barricaded else ("Open." if door.is_open else "Closed.")
+				return ["Front door", "%s Close it, and barricade it with the planks, when trouble comes." % state]
+			return ["Door", "Inside doors open for anyone."]
+	return Tips.world(target.id)
 
 
 # Fighting ---------------------------------------------------------------------

@@ -313,21 +313,23 @@ static func role(name: String, rng: RandomNumberGenerator) -> Dictionary:
 	return stranger(rng)
 
 
-## You, from your character: sex, skin, hair, and an apron over your clothes.
+## You, from your character: the face, clothes and colours you chose, and
+## an apron over them.
 static func player(character: PlayerCharacter) -> Dictionary:
 	var look: Dictionary = character.appearance
-	var woman: bool = look.get("sex", "man") == "woman"
-	var heads: Array = STREET_WOMEN if woman else STREET_MEN
-	var head_index := absi(hash(str(look.get("hair", "")) + str(look.get("facial", "")))) % heads.size()
-	return {
-		"sex": "woman" if woman else "man",
-		"head": heads[head_index],
-		"body": "Casual2" if not woman else "Casual",
-		"legs": "Casual",
-		"feet": "Casual",
+	var sex: String = look.get("sex", "man")
+	var recipe := {
+		"sex": sex,
+		"head": look.get("head", "Casual"),
+		"body": look.get("top", "Casual"),
+		"legs": look.get("legs", "Casual"),
+		"feet": look.get("feet", "Casual"),
 		"skin": GameData.SKIN_TONES.get(look.get("skin", "fair"), "#e2b796"),
 		"hair": GameData.HAIR_COLOURS.get(look.get("hair_colour", "brown"), "#46301f"),
-		"top": "#4b4a55",
-		"legs_colour": "#2d2f33",
 		"extras": ["apron"],
+		"apron_colour": GameData.APRON_COLOURS.get(look.get("apron", "white"), "#d8d0bc"),
 	}
+	var colour: String = look.get("top_colour", "as_made")
+	if GameData.TOP_COLOURS.has(colour):
+		recipe["top"] = GameData.TOP_COLOURS[colour]
+	return recipe

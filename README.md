@@ -70,6 +70,10 @@ Gangs come some nights (thugs bash the door; shooters fire through open windows 
 
 Everyone is built from Quaternius's CC0 Ultimate Modular Men and Women packs (`assets/people/`, see its LICENSE.md). Each outfit has Head, Body, Legs and Feet on one skeleton, so `scripts/world/people.gd` mixes parts across outfits, recolours skin, hair and clothes, and adds code-made extras (cassock, headscarf, hood, face cloth, hats, apron, props). `scripts/world/person_rig.gd` animates them in code: it finds each joint's turning axes itself, then drives walking, paying, eating, holding, swinging, aiming, bashing, flinching and falling.
 
+## Help and tooltips
+
+Every menu and creation control has a tooltip (`UiKit.tip`), also shown in a help line at the bottom for touch screens. In the game, holding the crosshair on something for about two thirds of a second shows what it is; the texts live in `scripts/core/tips.gd`. Character creation picks face, top, trousers and shoes from the outfit parts (`GameData.BODY_PARTS`) and shows the result in 3D.
+
 ## Picture
 
 Settings has Sharp, Crisp (default) and Retro, for the size of the game's pixels. Textures are generated in code at four times their old detail with grime and relief maps.

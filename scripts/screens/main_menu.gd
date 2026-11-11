@@ -31,19 +31,23 @@ func _ready() -> void:
 	gap.custom_minimum_size.y = 20
 	column.add_child(gap)
 
-	_first_button = _menu_button(column, "New game", _on_new_game)
+	_first_button = UiKit.tip(_menu_button(column, "New game", _on_new_game), Tips.MENU["new"]) as Button
 	_continue_slot = Saves.most_recent_living_slot()
 	var continue_text := "Continue"
 	if _continue_slot >= 0:
 		continue_text = "Continue as %s" % Saves.read_slot(_continue_slot)["character"].get("full_name", "")
-	var continue_button := _menu_button(column, continue_text, _on_continue)
+	var continue_button := UiKit.tip(_menu_button(column, continue_text, _on_continue), Tips.MENU["continue"]) as Button
 	continue_button.disabled = _continue_slot < 0
-	var load_button := _menu_button(column, "Load game", _on_load)
+	var load_button := UiKit.tip(_menu_button(column, "Load game", _on_load), Tips.MENU["load"]) as Button
 	load_button.disabled = not Saves.any_saves()
-	_menu_button(column, "Settings", _on_settings)
+	UiKit.tip(_menu_button(column, "Settings", _on_settings), Tips.MENU["settings"])
 	# iOS does not let apps close themselves.
 	if not OS.has_feature("ios") and not OS.has_feature("web"):
-		_menu_button(column, "Quit game", go_back)
+		UiKit.tip(_menu_button(column, "Quit game", go_back), Tips.MENU["quit"])
+	var help := UiKit.help_line("Point at, or touch, anything to learn what it does.")
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	help.custom_minimum_size.y = 60
+	column.add_child(help)
 	_add_version_button(margin)
 	if not DisplayServer.is_touchscreen_available():
 		_first_button.grab_focus()
@@ -55,6 +59,7 @@ func _add_version_button(margin: MarginContainer) -> void:
 	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(corner)
 	var node := UiKit.button("Version %s  ·  Patch notes" % Changelog.version(), PatchNotesPanel.open.bind(self))
+	UiKit.tip(node, Tips.MENU["version"])
 	node.add_theme_font_size_override("font_size", UiKit.SIZE_SMALL)
 	node.add_theme_color_override("font_color", UiKit.ASH)
 	node.add_theme_color_override("font_hover_color", UiKit.SODIUM)
