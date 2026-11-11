@@ -814,6 +814,8 @@ func spend_shift(id: String) -> void:
 	_update_shift()
 	_save_now()
 	hud.toast(result["text"])
+	if id == "mass":
+		_take_pew()
 	tween = create_tween()
 	tween.tween_interval(0.5)
 	tween.tween_property(hud.fade, "color:a", 0.0, 0.9)
@@ -821,9 +823,32 @@ func spend_shift(id: String) -> void:
 	for notice: String in Survival.take_notices(save):
 		hud.toast(notice)
 	if id == "mass":
-		_offer_communion()
+		_elevation()
 		return
 	_set_busy(false)
+
+
+## Mass is heard from the front pew, looking up the nave to the high altar.
+func _take_pew() -> void:
+	player.global_position = Church.ORIGIN + Vector3(15.55, 0.05, -1.4)
+	player.rotation.y = -PI / 2.0 - 0.1
+	player.set_pitch(deg_to_rad(-3.0))
+	# Your eyes are on the altar: the view narrows on it until Mass ends.
+	player.camera.fov = 30.0
+	world.church.set_mass("altar")
+
+
+## The high point of the Mass: from the front pew you watch the priest, his
+## back to you as he faces the altar with all of you, raise the Host high.
+func _elevation() -> void:
+	var church := world.church
+	await get_tree().create_timer(1.2).timeout
+	church.set_mass("elevation")
+	for ring in 3:
+		Sound.bell()
+		await get_tree().create_timer(0.9).timeout
+	await get_tree().create_timer(1.2).timeout
+	_offer_communion()
 
 
 # Computer ---------------------------------------------------------------------
@@ -1063,19 +1088,23 @@ func _talk_to_priest() -> void:
 
 
 func _offer_communion() -> void:
-	var body := "The priest holds up the Host. \"Behold the Lamb of God.\""
+	var body := "The bells ring as the priest lifts the Host high over the altar. Soon he turns to you: \"Ecce Agnus Dei. Behold the Lamb of God.\""
 	if not Soul.in_grace(save):
 		body += "\n\nYou are not in a state of grace."
 	ChoiceOverlay.ask(self, "Communion", body, [
 		["Go up and receive", _communion.bind(true)],
 		["Stay in the pew", _communion.bind(false)],
-	])
+	], Callable(), UiKit.LITURGICAL_GOLD, 0.35)
 
 
 func _communion(receive: bool) -> void:
 	var text := Soul.receive_communion(save) if receive else Soul.spiritual_communion(save)
 	_save_now()
-	NoticeOverlay.show_notice(self, "Communion", text, _set_busy.bind(false))
+	world.church.set_mass("altar")
+	NoticeOverlay.show_notice(self, "Communion", text, func() -> void:
+		world.church.set_mass("")
+		player.camera.fov = 75.0
+		_set_busy(false))
 
 
 # Temptation -------------------------------------------------------------------

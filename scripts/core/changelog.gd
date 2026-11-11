@@ -5,6 +5,14 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.13.0", "date": "11 Nov 2026", "title": "The high altar",
+		"changes": [
+			"St. Brigid's has a traditional high altar against the east wall: three steps up to the footpace, a stone altar with a green frontal and white cloths, gradines with six tall candles, the veiled tabernacle in the middle, altar cards and the missal, and a carved reredos with gilt arches, two statues and the crucifix above.",
+			"Hearing Mass now shows it. You watch from the front pew as the priest, vested in a white alb and a green Roman chasuble with its gold cross on the back, stands at the altar facing it with the people, his back to you.",
+			"At the Elevation the bells ring three times and he raises the Host high over his head, and only then are you asked about Communion.",
+		],
+	},
+	{
 		"version": "0.12.0", "date": "11 Nov 2026", "title": "Butcher's apron",
 		"changes": [
 			"A new apron: a butcher's bib with a neck strap, a skirt to the knee with a darker hem, and a waistband tied at the back.",

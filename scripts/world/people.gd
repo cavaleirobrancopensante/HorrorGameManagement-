@@ -236,6 +236,22 @@ static func _extra(rig: PersonRig, extra: String, recipe: Dictionary) -> void:
 			rig.attach("Head", _box(Vector3(0.17, 0.09, 0.04), Vector3(0.0, 0.02, -0.1), Color(recipe.get("cloth_colour", "#1e1d22"))))
 		"apron":
 			_apron(rig, recipe)
+		"chasuble":
+			_chasuble(rig, recipe)
+		"host":
+			# The Host, held up in the right hand; hidden until the Elevation.
+			rig._apply(0.0)
+			var host := _rod(0.06, 0.005, Vector3(-0.05, -0.17, 0.0), Vector3(90.0, 0.0, 0.0), Color("#f4efe2"))
+			host.name = "Host"
+			var shine := StandardMaterial3D.new()
+			shine.albedo_color = Color("#fffaf0")
+			shine.emission_enabled = true
+			shine.emission = Color("#fff4dc")
+			shine.emission_energy_multiplier = 0.8
+			host.material_override = shine
+			host.visible = false
+			var hand := rig.attach("Hand.R", Node3D.new())
+			hand.get_child(0).add_child(host)
 		"brim_hat":
 			var hat := Node3D.new()
 			hat.add_child(_rod(0.17, 0.015, Vector3(0.0, 0.2, 0.0), Vector3.ZERO, colour))
@@ -564,6 +580,81 @@ static func _apron(rig: PersonRig, recipe: Dictionary) -> void:
 	rig.attach("Torso", bib)
 
 
+## A Roman chasuble: a broad back with a gold cross, seen by the people while
+## the priest faces the altar, and a narrower "fiddleback" front with a gold
+## column, joined over the shoulders, all edged in gold.
+static func _chasuble(rig: PersonRig, recipe: Dictionary) -> void:
+	var silk := Color(recipe.get("chasuble_colour", "#2f5a3a"))
+	var gold := Color("#c9a246")
+	rig._apply(0.0)
+	var points := _torso_points(rig)
+	var torso := _bone_point(rig, "Torso")
+	var neck := _bone_point(rig, "Neck")
+	var knee := _bone_point(rig, "LowerLeg.L")
+	var top := neck.y - 0.03
+	var bottom := knee.y + 0.14
+	var depth := func(y: float, back: bool) -> float:
+		var found := -INF if back else INF
+		for p in points:
+			if absf(p.y - y) <= 0.04 and absf(p.x) < 0.12:
+				found = maxf(found, p.z) if back else minf(found, p.z)
+		return found
+	var vestment := Node3D.new()
+	vestment.name = "Chasuble"
+	for back: bool in [true, false]:
+		var rows := []
+		var steps := 10
+		for k in steps + 1:
+			var t := float(k) / steps
+			var y := lerpf(top, bottom, t)
+			var half := 0.3 if back else (lerpf(0.15, 0.1, t / 0.45) if t < 0.45 else lerpf(0.1, 0.18, (t - 0.45) / 0.55))
+			rows.append([y, half, depth.call(y, back)])
+		# Keep the cloth hanging straight: never further in than the line
+		# above it, so it falls from the shoulders rather than clinging.
+		for k in range(1, rows.size()):
+			if back:
+				rows[k][2] = maxf(rows[k][2], rows[k - 1][2] - 0.02)
+			else:
+				rows[k][2] = minf(rows[k][2], rows[k - 1][2] + 0.02)
+		var columns := 14
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for r in rows.size() - 1:
+			for c in columns:
+				var corners := []
+				for rc in [[r, c], [r + 1, c], [r, c + 1], [r, c + 1], [r + 1, c], [r + 1, c + 1]]:
+					var row: Array = rows[rc[0]]
+					var x: float = lerpf(-row[1], row[1], float(rc[1]) / columns)
+					var bend: float = x * x * 0.7
+					var z: float = row[2] + 0.03 - bend if back else row[2] - 0.03 + bend
+					corners.append(Vector3(x, row[0], z) - torso)
+				var mid_x := (float(c) + 0.5) / columns * 2.0 - 1.0
+				var mid_y: float = lerpf(rows[r][0], rows[r + 1][0], 0.5)
+				var edge := c == 0 or c == columns - 1 or r == rows.size() - 2
+				var column := absf(mid_x) < 0.16
+				var arm := back and mid_y < top - 0.16 and mid_y > top - 0.27
+				var colour := gold if edge or column or arm else silk
+				for corner in corners:
+					st.set_color(colour)
+					st.add_vertex(corner)
+		st.generate_normals()
+		var sheet := MeshInstance3D.new()
+		sheet.mesh = st.commit()
+		var material := StandardMaterial3D.new()
+		material.vertex_color_use_as_albedo = true
+		material.roughness = 0.7
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		sheet.material_override = material
+		vestment.add_child(sheet)
+	# Over the shoulders, either side of the neck.
+	for side in [-1.0, 1.0]:
+		var front_z: float = depth.call(top, false) - 0.03
+		var back_z: float = depth.call(top, true) + 0.03
+		var piece := _box(Vector3(0.09, 0.012, back_z - front_z), Vector3(side * 0.115, top + 0.004, (front_z + back_z) * 0.5) - torso, silk)
+		vestment.add_child(piece)
+	rig.attach("Torso", vestment)
+
+
 ## Builds a person, puts them in parent at a point facing yaw, and finishes them.
 static func place(parent: Node, recipe: Dictionary, at: Vector3, yaw := 0.0) -> PersonRig:
 	var rig := build(recipe)
@@ -607,6 +698,10 @@ static func role(name: String, rng: RandomNumberGenerator) -> Dictionary:
 	match name:
 		"priest":
 			return {"sex": "man", "head": "Suit", "body": "Suit", "legs": "Suit", "feet": "Suit", "skin": "#e2b796", "hair": "#85808a", "top": "#18161c", "top2": "#18161c", "legs_colour": "#18161c", "extras": ["cassock", "collar", "rosary"], "extra_colour": "#18161c", "height": 0.97}
+		"celebrant":
+			# The priest vested for Mass: a white alb to the ankles under a
+			# green Roman chasuble.
+			return {"sex": "man", "head": "Suit", "body": "Suit", "legs": "Suit", "feet": "Suit", "skin": "#e2b796", "hair": "#85808a", "top": "#ece8dc", "top2": "#ece8dc", "legs_colour": "#ece8dc", "extras": ["cassock", "chasuble", "host"], "extra_colour": "#ece8dc", "chasuble_colour": "#2f5a3a", "height": 0.97}
 		"informant":
 			return {"sex": "man", "head": "Suit", "body": "Suit", "legs": "Suit", "feet": "Suit", "skin": "#efd9c8", "hair": "#46301f", "top": "#5a5c60", "top2": "#d8d4cc", "legs_colour": "#55575c", "extras": ["brim_hat"], "extra_colour": "#4a4c50"}
 		"inspector":
