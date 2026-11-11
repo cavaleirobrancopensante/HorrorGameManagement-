@@ -23,6 +23,10 @@ var _holding := ""
 var _can_eat := false
 ## The next step, shown the first few times you do something.
 var _step := ""
+## A tooltip by the crosshair: what you are looking at, when you hold still.
+var _tip_title := ""
+var _tip_text := ""
+var _tip_alpha := 0.0
 ## Order bubbles over customers: [screen point, text, colour, mood].
 var bubbles: Array = []
 
@@ -43,6 +47,16 @@ func refresh() -> void:
 
 func set_prompt(text: String) -> void:
 	_prompt = text
+
+
+## Shows a tooltip beside the crosshair, or hides it with "".
+func set_tip(title: String, text: String) -> void:
+	if title == _tip_title and text == _tip_text:
+		return
+	_tip_title = title
+	_tip_text = text
+	_tip_alpha = 0.0
+	queue_redraw()
 
 
 func set_step(text: String) -> void:
@@ -129,11 +143,47 @@ func _draw() -> void:
 	if not _step.is_empty():
 		var step_y := size.y - (270.0 if touch_mode else 160.0)
 		_text(font, Vector2(0, step_y), _step, 24, Color("#a8d8b4"), size.x, HORIZONTAL_ALIGNMENT_CENTER)
+	if not _tip_title.is_empty():
+		_draw_tip(font, center)
 	if _toast_time > 0.0:
 		var alpha := clampf(_toast_time, 0.0, 1.0)
 		_text(font, Vector2(0, 150), _toast, 26, Color(UiKit.TALLOW, alpha), size.x, HORIZONTAL_ALIGNMENT_CENTER)
 	if not _hint.is_empty():
 		_text(font, Vector2(0, size.y - 40), _hint, 22, UiKit.ASH, size.x, HORIZONTAL_ALIGNMENT_CENTER)
+
+
+## A small panel to the lower right of the crosshair, fading in.
+func _draw_tip(font: Font, center: Vector2) -> void:
+	_tip_alpha = minf(_tip_alpha + get_process_delta_time() * 5.0, 1.0)
+	var width := 380.0
+	var lines := _wrap(font, _tip_text, 20, width - 28.0)
+	var height := 50.0 + lines.size() * 24.0
+	var at := center + Vector2(34.0, 26.0)
+	at.x = minf(at.x, size.x - width - 12.0)
+	at.y = minf(at.y, size.y - height - 12.0)
+	draw_rect(Rect2(at, Vector2(width, height)), Color(UiKit.COMPLINE, 0.9 * _tip_alpha))
+	draw_rect(Rect2(at, Vector2(width, height)), Color(UiKit.LITURGICAL_GOLD, 0.7 * _tip_alpha), false, 2.0)
+	_text(font, at + Vector2(14, 30), _tip_title, 24, Color(UiKit.LITURGICAL_GOLD, _tip_alpha))
+	for i in lines.size():
+		_text(font, at + Vector2(14, 56 + i * 24), lines[i], 20, Color(UiKit.TALLOW, _tip_alpha))
+	if _tip_alpha < 1.0:
+		queue_redraw()
+
+
+## Breaks text into lines that fit a width.
+func _wrap(font: Font, text: String, font_size: int, width: float) -> PackedStringArray:
+	var lines: PackedStringArray = []
+	for paragraph in text.split("\n"):
+		var line := ""
+		for word in paragraph.split(" "):
+			var trial := word if line.is_empty() else line + " " + word
+			if font.get_string_size(trial, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > width and not line.is_empty():
+				lines.append(line)
+				line = word
+			else:
+				line = trial
+		lines.append(line)
+	return lines
 
 
 func _bubble(font: Font, anchor: Vector2, text: String, colour: Color, mood := -1.0) -> void:

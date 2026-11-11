@@ -142,14 +142,25 @@ func randomize_name(rng: RandomNumberGenerator) -> void:
 
 func randomize_appearance(rng: RandomNumberGenerator) -> void:
 	for def: Dictionary in GameData.APPEARANCE:
-		appearance[def["id"]] = _pick(def["options"], rng)[0]
+		appearance[def["id"]] = _pick(GameData.options_for(def["id"], "man"), rng)[0]
+	for id in ["head", "top", "legs", "feet"]:
+		appearance[id] = _pick(GameData.options_for(id, appearance["sex"]), rng)[0]
 	normalize_appearance()
 
 
-## Keeps appearance options that depend on each other consistent.
+## Keeps appearance options that depend on each other consistent: a choice
+## that does not exist for this sex falls back to the first that does.
 func normalize_appearance() -> void:
 	if appearance["sex"] == "woman":
 		appearance["facial"] = "none"
+	for id in ["head", "top", "legs", "feet"]:
+		var options := GameData.options_for(id, appearance["sex"])
+		var found := false
+		for option: Array in options:
+			if option[0] == appearance.get(id, ""):
+				found = true
+		if not found:
+			appearance[id] = options[0][0]
 
 
 func randomize_temperament(rng: RandomNumberGenerator) -> void:
@@ -223,6 +234,7 @@ static func from_dict(data: Dictionary) -> PlayerCharacter:
 	for id: String in character.appearance:
 		if saved_look.has(id):
 			character.appearance[id] = str(saved_look[id])
+	character.normalize_appearance()
 	var saved_sins: Dictionary = data.get("sins", {})
 	for id: String in character.sins:
 		character.sins[id] = int(saved_sins.get(id, 0))
