@@ -319,12 +319,11 @@ func _order(id: String) -> void:
 
 ## Your standing with the state, and what it costs to be left alone.
 func _build_civic() -> void:
-	var lean := float(game.save["soul"]["horror_lean"])
-	var level := Horror.intensity(game.save, "state")
+	var level := Horror.intensity(game.save)
 	var standing := "Cooperative" if level < 0.2 else ("Under review" if level < 0.45 else ("Flagged: irregular assembly" if level < 0.7 else "Priority enforcement"))
 	_content.add_child(UiKit.label("Account standing: %s" % standing, 30, PHOSPHOR))
 	var note := "Faith-affiliated activity raises your profile with the Civic Link. Flagged accounts receive inspections, surcharges, camera supervision and, at night, enforcement drones and raids."
-	if lean > 0.0:
+	if Horror.attention(game.save) < 0.15:
 		note += " Your account currently attracts little state attention."
 	_content.add_child(UiKit.wrapped_label(note, 22, DIM))
 	var state := UiKit.label("", 24, PHOSPHOR)
@@ -360,9 +359,8 @@ func _build_civic() -> void:
 func _build_news() -> void:
 	var day := Survival.day_of(Survival.now(game.save))
 	_content.add_child(UiKit.label("Civic News, %s" % Survival.date_text(Survival.now(game.save), true), 30, PHOSPHOR))
-	var lean := int(game.save["soul"].get("horror_lean", 0))
 	var first := true
-	for line: String in Survival.headlines(day, lean):
+	for line: String in Survival.headlines(day, Horror.attention(game.save)):
 		var headline := UiKit.wrapped_label(line, 30 if first else 24, PHOSPHOR if first else DIM)
 		_content.add_child(headline)
 		var rule := ColorRect.new()

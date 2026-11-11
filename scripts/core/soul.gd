@@ -1,137 +1,60 @@
 class_name Soul
 extends RefCounted
-## Sin, confession, penance and Communion. Works on the save dictionary, like
-## Survival, so the same rules run in the game and in the tests.
-##
-## Grave sins cost the state of grace. A full confession restores it. Holding a
-## grave sin back makes the confession a bad one: nothing is forgiven, and it
-## adds sacrilege. Communion in a state of grace strengthens you against
-## temptation for the day; received in mortal sin it is another sacrilege.
+## The sacraments and the church's hours. Mass, Communion and confession are
+## moments of quiet in the game, not mechanics: they give no bonuses, keep no
+## meters and take nothing away. Confession is mercy: you are welcomed, and
+## the regrets you carried are laid down, with no penalty and no counter.
 
-const PRIEST := "Father Columba"
-const SACRILEGE_LEAN := 8
-const CONFESSION_LEAN := -4
-const COMMUNION_LEAN := -3
-const PENANCE_LEAN := -1
+const PRIEST := Parish.PRIEST
 
 
 static func ensure(save: Dictionary) -> void:
+	if not (save.get("soul") is Dictionary):
+		save["soul"] = {}
 	var soul: Dictionary = save["soul"]
-	if not soul.has("state_of_grace"):
-		soul["state_of_grace"] = true
-	if not soul.has("horror_lean"):
-		soul["horror_lean"] = 0
-	if not (soul.get("sins") is Array):
-		soul["sins"] = []
-	if not soul.has("penance"):
-		soul["penance"] = false
-	if not soul.has("communion_day"):
-		soul["communion_day"] = 0
-	if not soul.has("confession_day"):
-		soul["confession_day"] = 0
-	if not soul.has("tempted_shift"):
-		soul["tempted_shift"] = -1
+	# Older saves kept a record of sins and a state of grace; neither is used.
+	for old in ["state_of_grace", "sins", "penance", "communion_day", "confession_day", "tempted_shift", "horror_lean"]:
+		soul.erase(old)
+	if not (soul.get("regrets") is Array):
+		soul["regrets"] = []
+	Moments.ensure(save)
 
-
-static func in_grace(save: Dictionary) -> bool:
-	return bool(save["soul"]["state_of_grace"])
-
-
-static func sins(save: Dictionary) -> Array:
-	return save["soul"]["sins"]
-
-
-static func has_grave(save: Dictionary) -> bool:
-	for entry: Dictionary in sins(save):
-		if entry["grave"]:
-			return true
-	return false
-
-
-## Remembers a sin until it is confessed. Grave matter costs the state of grace.
-static func record(save: Dictionary, sin_id: String, text: String, grave: bool, lean: int) -> void:
-	sins(save).append({"sin": sin_id, "text": text, "grave": grave, "day": int(save.get("day", 1))})
-	if grave:
-		save["soul"]["state_of_grace"] = false
-	Survival.change_lean(save, lean)
-
-
-## Fortified today by Communion or a good confession: resisting costs less.
-static func fortified(save: Dictionary, day: int) -> bool:
-	var soul: Dictionary = save["soul"]
-	return int(soul["communion_day"]) == day or int(soul["confession_day"]) == day
-
-
-# Confession -------------------------------------------------------------------
 
 ## Fr. Columba hears confessions in the evening shift every day, and on
-## Saturday afternoon too.
-static func confession_open(minutes: float) -> bool:
+## Saturday afternoon too, when he is free and the church is open.
+static func confession_open(save: Dictionary, minutes: float) -> bool:
+	if not Parish.sacraments_available(save):
+		return false
 	var shift := Survival.shift_index(minutes)
 	return shift == 3 or (Survival.weekday(minutes) == 6 and shift == 2)
 
 
-## St. Brigid's is open from the morning to the end of the evening shift.
-static func church_open(minutes: float) -> bool:
-	return Survival.shift_index(minutes) <= 3
+## St. Brigid's is open from the morning to the end of the evening shift,
+## unless it has been closed.
+static func church_open(save: Dictionary, minutes: float) -> bool:
+	return not Parish.closed(save) and Survival.shift_index(minutes) <= 3
 
 
-## What you would confess, worst first, as lines for the screen.
+## What you bring to confession: the regrets you carry, as lines.
 static func examination(save: Dictionary) -> PackedStringArray:
 	var lines: PackedStringArray = []
-	for grave in [true, false]:
-		for entry: Dictionary in sins(save):
-			if bool(entry["grave"]) == grave:
-				lines.append(("Grave: " if grave else "") + str(entry["text"]))
+	for regret: Dictionary in Virtue.regrets(save):
+		lines.append(str(regret["text"]))
 	return lines
 
 
-## full: everything is told. Otherwise the worst sin is held back out of shame.
-## Returns what the priest says and what happens.
-static func confess(save: Dictionary, full: bool) -> String:
-	var soul: Dictionary = save["soul"]
-	var day := int(save.get("day", 1))
-	var hidden_grave := not full and has_grave(save)
-	if hidden_grave:
-		record(save, "sacrilege", "A bad confession: you held back a grave sin.", true, SACRILEGE_LEAN)
-		Survival.change_need(save, "stress", 10.0)
-		return "%s gives you absolution. The words slide off you. You knew what you left out, and so does something else." % PRIEST
-	var had_sins := not sins(save).is_empty()
-	sins(save).clear()
-	soul["state_of_grace"] = true
-	soul["confession_day"] = day
-	Survival.change_lean(save, CONFESSION_LEAN)
-	Survival.change_need(save, "stress", -25.0)
-	if had_sins:
-		soul["penance"] = true
-		return "\"For your penance, pray once before the Blessed Sacrament or at your altar at home.\" %s raises his hand and absolves you. You walk out lighter." % PRIEST
-	return "\"Go in peace.\" There was little to tell, but you leave lighter all the same."
+## Confession: the priest welcomes you and absolves you. What you carried is
+## laid down. Returns what he says.
+static func confess(save: Dictionary) -> String:
+	var carried := Virtue.lift_regrets(save)
+	if carried == 0:
+		return "\"There is always something, even when we cannot name it.\" He absolves you, and asks you to pray for him, which you would have done anyway. You go out into the evening quieter than you came."
+	return "He listens to all of it without a sound. Then: \"You came. That is the part that matters.\" He raises his hand over the grille and absolves you, and it is gone, all of it, as if it had been carried out of the box ahead of you. For your penance, a single Hail Mary. You walk out into the evening lighter than you have been for a long time."
 
 
-## Prayer finishes a penance you were given. Returns true if it did.
-static func do_penance(save: Dictionary) -> bool:
-	var soul: Dictionary = save["soul"]
-	if not bool(soul["penance"]):
-		return false
-	soul["penance"] = false
-	Survival.change_lean(save, PENANCE_LEAN)
-	return true
-
-
-# Communion --------------------------------------------------------------------
-
-static func receive_communion(save: Dictionary) -> String:
-	var day := int(save.get("day", 1))
-	if not in_grace(save):
-		record(save, "sacrilege", "You received Communion in mortal sin.", true, SACRILEGE_LEAN)
-		Survival.change_need(save, "stress", 12.0)
-		return "You receive. It sits in your mouth like ash. You should have gone to confession first."
-	save["soul"]["communion_day"] = day
-	Survival.change_lean(save, COMMUNION_LEAN)
-	Survival.change_need(save, "stress", -15.0)
-	return "You receive Communion. For the rest of the day, temptation has less hold on you."
-
-
-static func spiritual_communion(save: Dictionary) -> String:
-	Survival.change_need(save, "stress", -5.0)
-	return "You stay in the pew and make a spiritual communion. Confession first, then the altar."
+## Communion, received or made spiritually: a moment of quiet, nothing more
+## to count.
+static func communion_text(receive: bool) -> String:
+	if receive:
+		return "You go up with the others and receive, and go back to the pew, and for a while there is nothing to do but be still."
+	return "You stay in the pew while the others go up, and make a spiritual communion, and are still."

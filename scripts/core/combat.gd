@@ -79,7 +79,7 @@ static func compliant(save: Dictionary) -> bool:
 
 ## What the Civic Link asks: more the more faithful you look.
 static func compliance_price(save: Dictionary) -> int:
-	return 20 + roundi(maxf(-float(save["soul"]["horror_lean"]), 0.0) * 0.8)
+	return 20 + roundi(float(save["horror"]["attention"]) * 0.5)
 
 
 ## Pays for three days of being left alone. Returns "" or what went wrong.
@@ -90,6 +90,7 @@ static func pay_compliance(save: Dictionary) -> String:
 	save["survival"]["money"] = Survival.money(save) - price
 	var start := maxf(Survival.now(save), float(save["horror"]["compliance_until"]))
 	save["horror"]["compliance_until"] = start + COMPLIANCE_DAYS * Survival.DAY
+	Horror.notice(save, -10.0)
 	return ""
 
 
@@ -126,7 +127,7 @@ static func roll_hunt(save: Dictionary, rng: RandomNumberGenerator) -> int:
 		return 0
 	if now < float(save["horror"]["next_hunt"]):
 		return 0
-	var level := Horror.intensity(save, "state")
+	var level := Horror.intensity(save)
 	if level < 0.45 or rng.randf() >= (level - 0.4) * 0.12:
 		return 0
 	save["horror"]["next_hunt"] = now + rng.randf_range(HUNT_GAP_DAYS.x, HUNT_GAP_DAYS.y) * Survival.DAY

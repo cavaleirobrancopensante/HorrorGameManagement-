@@ -240,6 +240,11 @@ func _side_things() -> void:
 	world._cyl(0.3, 0.14, _p(1.2, 1.0, 3.4), stone, Vector3.ZERO, 0.22)
 	world._span(_p(1.0, 1.07, 3.2), _p(1.4, 1.08, 3.6), world._g("#6f8fa0"), false)
 	world._zone(_p(0.9, 0, 3.1), _p(1.5, 1.2, 3.7), "font")
+	# The poor box by the door, for the parish and its poor.
+	world._span(_p(2.2, 0, 3.75), _p(2.6, 1.05, 4.15), world._m("wood"))
+	world._span(_p(2.18, 1.05, 3.73), _p(2.62, 1.12, 4.17), world._c("#6b5a3a"), false)
+	world._span(_p(2.3, 1.12, 3.9), _p(2.5, 1.125, 3.98), world._c("#141214"), false)
+	world._zone(_p(2.1, 0, 3.6), _p(2.7, 1.3, 4.2), "poor_box")
 	# Our Lady, and the votive stand at her feet.
 	world._span(_p(16.6, 0, 3.9), _p(17.6, 0.9, 4.9), stone)
 	world._cyl(0.28, 1.4, _p(17.1, 1.6, 4.4), world._c("#3d5a8a"), Vector3.ZERO, 0.16)

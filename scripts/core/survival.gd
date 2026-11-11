@@ -50,9 +50,11 @@ static func ensure(save: Dictionary) -> void:
 		world["mass_days"] = []
 	if not (world.get("notices") is Array):
 		world["notices"] = []
-	if not (save.get("soul") is Dictionary):
-		save["soul"] = {"state_of_grace": true, "horror_lean": 0}
+	var who := PlayerCharacter.from_dict(save.get("character", {}))
 	Soul.ensure(save)
+	Virtue.ensure(save, who)
+	Parish.ensure(save)
+	Life.ensure(save, who)
 	Horror.ensure(save)
 	Combat.ensure(save)
 	if not (save.get("survival") is Dictionary):
@@ -133,8 +135,12 @@ static func money(save: Dictionary) -> int:
 static func advance(save: Dictionary, minutes: float, rates: Dictionary = RATES) -> String:
 	var hours := minutes / 60.0
 	var day_before := day_of(now(save))
+	var measure := Virtue.need_rate(save)
 	for id: String in rates:
-		change_need(save, id, float(rates[id]) * hours)
+		var rate := float(rates[id])
+		if rate > 0.0 and id != "stress":
+			rate *= measure
+		change_need(save, id, rate * hours)
 	var cause := ""
 	if need(save, "thirst") >= GameData.NEED_MAX:
 		change_health(save, -DAMAGE_PER_HOUR * hours)
@@ -164,12 +170,23 @@ static func sleep(save: Dictionary) -> String:
 	return advance(save, sleep_minutes(save), SLEEP_RATES)
 
 
-## A Sunday ending without Mass costs the state of grace.
+## The end of each day: the state's attention fades a little, old age may
+## bring the last illness, and on Sunday night the parish has its week.
 static func _end_of_day(save: Dictionary, day: int) -> void:
-	if weekday_of_day(day) != 0 or attended_mass(save, day):
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(save.get("created", 0)) * 31 + day * 7919
+	Horror.fade(save)
+	var illness := Life.roll_illness(save, rng)
+	if not illness.is_empty():
+		notify(save, illness)
+	if weekday_of_day(day) != 0:
 		return
-	Soul.record(save, "mass", "You missed Sunday Mass.", true, 3)
-	notify(save, "You missed Sunday Mass. You are no longer in a state of grace.")
+	var attended := attended_mass(save, day)
+	if not attended and Parish.sacraments_available(save):
+		Virtue.fail(save, "justice", "You missed Mass on Sunday.")
+		notify(save, "You missed Mass on Sunday. The pews were a little emptier without you.")
+	for line in Parish.week(save, attended, Horror.attention(save), rng):
+		notify(save, line)
 
 
 static func notify(save: Dictionary, text: String) -> void:
@@ -285,10 +302,14 @@ static func spend_shift(save: Dictionary, id: String, character: PlayerCharacter
 		"rosary":
 			text = "You pray the rosary at the home altar."
 		"mass":
-			(save["world"]["mass_days"] as Array).append(mass_sunday(start))
-			text = "You hear Mass at St. Brigid's. A state drone followed you there and back."
-	if activity.has("lean"):
-		change_lean(save, int(activity["lean"]))
+			if Parish.sacraments_available(save):
+				(save["world"]["mass_days"] as Array).append(mass_sunday(start))
+				Life.count(save, "masses")
+				Parish.change(save, 0.8)
+				Horror.notice(save, 4.0)
+				text = "You hear Mass at St. Brigid's. A state drone followed you there and back."
+			else:
+				text = "There is no Mass at St. Brigid's. A few of you say the rosary together in the cold church, and go home."
 	var cause := advance(save, minutes, activity["rates"])
 	return {"cause": cause, "text": text}
 
@@ -312,11 +333,6 @@ static func _work(save: Dictionary, minutes: float, character: PlayerCharacter, 
 		change_need(save, "stress", turned_away * 1.5)
 		text += " %d customers left hungry: you ran out of stock." % turned_away
 	return text
-
-
-static func change_lean(save: Dictionary, delta: int) -> void:
-	var soul: Dictionary = save["soul"]
-	soul["horror_lean"] = clampi(int(soul.get("horror_lean", 0)) + delta, GameData.HORROR_LEAN_MIN, GameData.HORROR_LEAN_MAX)
 
 
 # Stock ------------------------------------------------------------------------
@@ -422,23 +438,17 @@ static func collect(save: Dictionary) -> Dictionary:
 
 # News -------------------------------------------------------------------------
 
-## Five headlines for the day. Faithfulness brings persecution stories, sin
-## brings stranger ones, and a balanced soul gets a little of either.
-static func headlines(day: int, lean: int) -> Array[String]:
+## Five headlines for the day. The harder the state watches you, the more
+## of them are about the persecution. watched: 0 to 1.
+static func headlines(day: int, watched: float) -> Array[String]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = day * 7919 + 13
 	var common := _shuffled(GameData.NEWS_COMMON, rng)
+	var persecution := _shuffled(GameData.NEWS_PERSECUTION, rng)
+	var count := 2 if watched >= 0.3 else 1
 	var picked: Array[String] = []
-	if lean <= -15:
-		picked.append_array(_shuffled(GameData.NEWS_PERSECUTION, rng).slice(0, 2))
-		picked.append_array(common.slice(0, 3))
-	elif lean >= 15:
-		picked.append_array(_shuffled(GameData.NEWS_DEMONIC, rng).slice(0, 2))
-		picked.append_array(common.slice(0, 3))
-	else:
-		var pool: Array = GameData.NEWS_PERSECUTION if rng.randf() < 0.5 else GameData.NEWS_DEMONIC
-		picked.append(_shuffled(pool, rng)[0])
-		picked.append_array(common.slice(0, 4))
+	picked.append_array(persecution.slice(0, count))
+	picked.append_array(common.slice(0, 5 - count))
 	return picked
 
 

@@ -33,13 +33,13 @@ var _rng := RandomNumberGenerator.new()
 var body: PersonRig
 var _body_prop: Node3D
 var _body_look := ""
-## Game minutes since the last roll for a temptation.
-var _tempt_minutes := 0.0
+## Game minutes since the last roll for a moment.
+var _moment_minutes := 0.0
 ## What the crosshair has rested on, and for how long: tooltips wait a moment.
 var _tip_target: Object = null
 var _tip_wait := 0.0
 const TIP_DELAY := 0.65
-## Stages the demonic and the state, from the state of your soul.
+## Stages the persecution and the street's dangers.
 var horror: HorrorDirector
 ## Your bat and slingshot.
 var fighter: Fighter
@@ -260,7 +260,8 @@ func _process(delta: float) -> void:
 			_autosave = 0.0
 			_save_now()
 		_update_music(delta)
-		_check_temptation(delta * Survival.MINUTES_PER_SECOND)
+		_check_moment(delta * Survival.MINUTES_PER_SECOND)
+		_check_illness()
 		horror.tick(delta, _busy, _in_church)
 		_flicker_wait -= delta
 		if _flicker_wait <= 0.0:
@@ -327,9 +328,8 @@ func choose_piece() -> String:
 		return "sunday"
 	if light >= 0.5:
 		return "overcast"
-	# At night, dread grows with sin and with stress.
-	var lean := float(save["soul"].get("horror_lean", 0))
-	var dread := clampf(0.25 + lean / 200.0 + Survival.need(save, "stress") / 400.0, 0.1, 0.8)
+	# At night, unease grows with the state's attention and with stress.
+	var dread := clampf(0.25 + Horror.attention(save) * 0.3 + Survival.need(save, "stress") / 400.0, 0.1, 0.8)
 	if _last_piece == "outside":
 		dread *= 0.5
 	return "outside" if _rng.randf() < dread else "night_shift"
@@ -521,20 +521,24 @@ func _prompt_for(target: Interactable) -> String:
 				return "First aid box (%d bandages)" % bandages
 			return "Bandage your wounds (%d left)" % bandages
 		"church_street":
-			if not Soul.church_open(Survival.now(save)):
+			if Parish.closed(save):
+				return "St. Brigid's is closed: its doors are chained"
+			if not Soul.church_open(save, Survival.now(save)):
 				return "St. Brigid's is locked at night"
 			return "Walk to St. Brigid's (%d min)" % int(Church.WALK_MINUTES)
 		"church_exit":
 			return "Walk home (%d min)" % int(Church.WALK_MINUTES)
 		"pew":
-			if Survival.activity_blocked(save, "mass").is_empty():
+			if Survival.activity_blocked(save, "mass").is_empty() and Parish.sacraments_available(save):
 				return "Hear Mass"
 			return "Kneel and pray"
 		"tabernacle":
 			return "Pray before the Blessed Sacrament"
 		"confession":
-			if Soul.confession_open(Survival.now(save)):
+			if Soul.confession_open(save, Survival.now(save)):
 				return "Go to confession"
+			if not Parish.priest_free(save):
+				return "No confessions: the priest is being held"
 			return "Confessions: evenings, and Saturday afternoon"
 		"priest":
 			return "Talk to %s" % Soul.PRIEST
@@ -542,6 +546,8 @@ func _prompt_for(target: Interactable) -> String:
 			return "Bless yourself with holy water"
 		"votive":
 			return "Light a candle to Our Lady (1 credit)"
+		"poor_box":
+			return "Give to the poor box (5 credits)"
 	return ""
 
 
@@ -600,7 +606,7 @@ func _interact() -> void:
 			world.set_hatch_open(open, true)
 			Sound.play("door", 0.1)
 		"bed":
-			_sleep()
+			_bed()
 		"altar":
 			_pray()
 		"delivery":
@@ -629,19 +635,19 @@ func _interact() -> void:
 			Sound.play("door", 0.15, -10.0)
 			save["world"]["learned"]["shutters"] = true
 		"church_street":
-			if Soul.church_open(Survival.now(save)):
+			if Soul.church_open(save, Survival.now(save)):
 				_walk(true)
 		"church_exit":
 			_walk(false)
 		"pew":
-			if Survival.activity_blocked(save, "mass").is_empty():
+			if Survival.activity_blocked(save, "mass").is_empty() and Parish.sacraments_available(save):
 				spend_shift("mass")
 			else:
-				_church_prayer("You kneel in the pew and pray. The church is quiet but for the heating ticking.", -15.0)
+				_church_prayer("You kneel in the pew and pray. The church is quiet but for the heating ticking.")
 		"tabernacle":
-			_church_prayer("You kneel at the rail before the tabernacle. The red lamp burns.", -25.0)
+			_church_prayer("You kneel at the rail before the tabernacle. The red lamp burns.")
 		"confession":
-			if Soul.confession_open(Survival.now(save)):
+			if Soul.confession_open(save, Survival.now(save)):
 				_confession()
 		"priest":
 			_talk_to_priest()
@@ -655,9 +661,14 @@ func _interact() -> void:
 			else:
 				save["survival"]["money"] = Survival.money(save) - 1
 				world.church.light_votive()
-				Survival.change_need(save, "stress", -8.0)
-				Survival.change_lean(save, -1)
 				hud.toast("You light a candle to Our Lady and ask her to pray for you.")
+		"poor_box":
+			var given := Parish.give(save, 5)
+			if given.begins_with("You put"):
+				Virtue.act(save, "charity", character, 0.5)
+				Horror.notice(save, 0.5)
+				GameLog.good("Gave 5 credits to the poor box.")
+			hud.toast(given)
 
 
 ## A quarter of an hour under the water: it eases stress and wakes you a little.
@@ -695,14 +706,11 @@ func _pray() -> void:
 		Survival.take_stock(save, "candles")
 		save["world"]["candle_day"] = Survival.day_of(Survival.now(save))
 		world.set_candle_lit(true)
-		Survival.change_need(save, "stress", -35.0)
-		hud.toast("You light a candle and pray. Your stress eases.")
+		Survival.change_need(save, "stress", -6.0)
+		hud.toast("You light a candle and pray. For a while the trailer is very quiet.")
 	else:
-		Survival.change_need(save, "stress", -25.0)
-		hud.toast("You pray. Your stress eases.")
-	Survival.change_lean(save, -1)
-	if Soul.do_penance(save):
-		hud.toast("You say your penance.")
+		Survival.change_need(save, "stress", -4.0)
+		hud.toast("You kneel at the little altar and pray, and are quiet for a while.")
 	var cause := Survival.advance(save, 10.0)
 	if not cause.is_empty():
 		_die(cause)
@@ -735,12 +743,50 @@ func _collect() -> void:
 		hud.toast("You install the %s." % " and the ".join(installed))
 
 
-func _sleep() -> void:
-	var now := Survival.now(save)
-	var hour := Survival.hour_of(now)
+## The bed: sleep the night, or let weeks pass in a summary, living them as
+## your habits would. A life is long; this is how a game can hold one.
+func _bed() -> void:
+	var hour := Survival.hour_of(Survival.now(save))
 	if not (hour >= 20 or hour < 5 or Survival.need(save, "tiredness") >= 60.0):
 		hud.toast("You are not tired enough to sleep.")
 		return
+	if Life.ill(save):
+		_sleep()
+		return
+	_set_busy(true)
+	ChoiceOverlay.ask(self, "Bed", "You are %d. %s" % [Life.age(save), Parish.describe(save)], [
+		["Sleep until morning", _sleep_now],
+		["Let a week go by", _pass_time.bind(7)],
+		["Let a month go by", _pass_time.bind(28)],
+		["Let a season go by", _pass_time.bind(91)],
+	], _set_busy.bind(false))
+
+
+func _sleep_now() -> void:
+	_set_busy(false)
+	_sleep()
+
+
+func _pass_time(days: int) -> void:
+	hud.fade.color = Color(0, 0, 0, 0)
+	var tween := create_tween()
+	tween.tween_property(hud.fade, "color:a", 1.0, 0.8)
+	await tween.finished
+	stand.clear()
+	var result := Life.pass_days(save, character, days, _rng)
+	for notice: String in Survival.take_notices(save):
+		result["lines"].append(notice)
+	world.apply_upgrades(save["world"]["upgrades"])
+	_update_day()
+	_save_now()
+	GameLog.add("info", "%d days passed in a summary." % int(result["days"]))
+	NoticeOverlay.show_notice(self, "The weeks go by", "\n\n".join(PackedStringArray(result["lines"])), func() -> void:
+		_set_busy(false)
+		_sleep())
+
+
+func _sleep() -> void:
+	var now := Survival.now(save)
 	_set_busy(true)
 	hud.fade.color = Color(0, 0, 0, 0)
 	var tween := create_tween()
@@ -755,10 +801,7 @@ func _sleep() -> void:
 		return
 	_update_day()
 	if woken:
-		if night["id"] == "burglar":
-			await _burglar()
-		else:
-			await _paralysis()
+		await _burglar()
 		return
 	_save_now()
 	var woke := Survival.now(save)
@@ -822,29 +865,6 @@ func _after_night(text: String, window := false) -> void:
 			return
 		_set_busy(false)
 	)
-
-
-## You wake and cannot move. Something comes closer.
-func _paralysis() -> void:
-	player.global_position = Vector3(9.0, 0.05, 1.9)
-	player.rotation.y = PI / 2.0
-	player.set_pitch(deg_to_rad(-4.0))
-	world.blackout(true)
-	var result := Horror.paralysis(save, character.stat_value("nerve"), _rng)
-	var shape := horror._shape(Vector3(6.9, 0.0, 1.9), TrailerWorld.LAYER_WORLD, 6.0)
-	var tween := create_tween()
-	tween.tween_property(hud.fade, "color:a", 0.0, 1.2)
-	await tween.finished
-	Sound.play("tempt", 0.0, -2.0)
-	var approach := create_tween()
-	approach.tween_property(shape, "global_position:x", 8.25, 4.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await approach.finished
-	if result["face"]:
-		await horror._jumpscare()
-	if is_instance_valid(shape):
-		shape.queue_free()
-	world.blackout(false)
-	_after_night(result["text"])
 
 
 # Shifts -----------------------------------------------------------------------
@@ -1062,7 +1082,8 @@ func _set_in_church(inside: bool) -> void:
 	_in_church = inside
 	world.set_in_church(inside)
 	if inside:
-		world.church.informant.visible = int(save["soul"]["horror_lean"]) <= -15
+		world.church.informant.visible = Horror.attention(save) >= 0.3
+		Horror.notice(save, 1.0)
 
 
 ## The walk to St. Brigid's or back home: a fade and twenty minutes.
@@ -1099,11 +1120,11 @@ func _walk(to_church: bool) -> void:
 	_set_busy(false)
 
 
-## Faithfulness draws the state's attention. The more it leans that way, the
+## Faithfulness draws the state's attention. The more it watches you, the
 ## likelier a fine on the way home.
 func _walk_home_events() -> void:
-	var lean := int(save["soul"]["horror_lean"])
-	if lean <= -20 and _rng.randf() < clampf(-lean / 100.0, 0.2, 0.6):
+	var watched := Horror.attention(save)
+	if watched >= 0.25 and _rng.randf() < clampf(watched * 0.8, 0.2, 0.6):
 		var fine := mini(8, Survival.money(save))
 		save["survival"]["money"] = Survival.money(save) - fine
 		hud.toast("A Civic patrol stops you outside the church. 'Unregistered gathering.' Fined %d credits." % fine)
@@ -1111,40 +1132,37 @@ func _walk_home_events() -> void:
 		hud.toast("You walk home past the cameras.")
 
 
-func _church_prayer(text: String, stress: float) -> void:
-	Survival.change_need(save, "stress", stress)
-	Survival.change_lean(save, -1)
+## A moment of prayer in the church: quiet, and nothing to count.
+func _church_prayer(text: String) -> void:
+	Survival.change_need(save, "stress", -4.0)
 	hud.toast(text)
-	if Soul.do_penance(save):
-		hud.toast("You say your penance.")
 	var cause := Survival.advance(save, 15.0)
 	if not cause.is_empty():
 		_die(cause)
 
 
+## Confession is mercy. You bring what you carry, and it is taken from you.
 func _confession() -> void:
 	_set_busy(true)
 	var lines := Soul.examination(save)
-	var body := "You kneel in the dark. The grille slides open. \"Bless me, Father, for I have sinned.\"\n\n"
+	var body := "You kneel in the dark. The grille slides open, and Father Columba says quietly, \"Welcome. Take your time.\"\n\n"
 	if lines.is_empty():
-		body += "You search your conscience and find little on record since your last confession."
+		body += "You search your conscience. Nothing stands out, only the ordinary dust of the days."
 	else:
-		body += "Your conscience:\n" + "\n".join(lines)
-	var choices := [["Confess everything", _confess.bind(true)]]
-	if Soul.has_grave(save):
-		choices.append(["Leave out the worst of it", _confess.bind(false)])
-	ChoiceOverlay.ask(self, "Confession", body, choices, _set_busy.bind(false))
+		body += "You tell him:\n" + "\n".join(lines)
+	ChoiceOverlay.ask(self, "Confession", body, [["\"Bless me, Father, for I have sinned.\"", _confess]], _set_busy.bind(false), UiKit.LITURGICAL_GOLD)
 
 
-func _confess(full: bool) -> void:
-	var text := Soul.confess(save, full)
+func _confess() -> void:
+	var text := Soul.confess(save)
+	Horror.notice(save, 1.0)
 	GameLog.good("Went to confession.")
 	var cause := Survival.advance(save, 20.0)
 	if not cause.is_empty():
 		_die(cause)
 		return
 	_save_now()
-	NoticeOverlay.show_notice(self, Soul.PRIEST, text, _set_busy.bind(false))
+	NoticeOverlay.show_notice(self, "Absolution", text, _set_busy.bind(false))
 
 
 func _talk_to_priest() -> void:
@@ -1153,19 +1171,18 @@ func _talk_to_priest() -> void:
 		"\"Come in the evening, if you need confession. The cameras watch the door less once the light goes.\"",
 		"\"Fear is not a sin. What you do because of it can be.\"",
 		"\"The kiosk robots never sleep. You must. Rest is not sloth.\"",
-		"\"I have heard the stories about the rail yard. Stay inside after dark, and keep your candle lit.\"",
+		"\"Virtue is a habit, like your grill. Every day you light it, it lights more easily.\"",
+		"\"The parish is not this building. It is the people who keep coming.\"",
 	]
-	if not Soul.in_grace(save):
-		lines.append("\"You look like a man carrying something heavy. The box is right there.\"")
-	if int(save["soul"]["horror_lean"]) >= 20:
-		lines.append("\"Something follows you in here and waits at the door. It cannot come further. Do not let it in at home either.\"")
+	if not Virtue.regrets(save).is_empty():
+		lines.append("\"You look like someone carrying something heavy. The box is right there, any evening.\"")
+	if Parish.strength(save) < 30.0:
+		lines.append("\"We are fewer every week. Bring someone with you on Sunday, if you can.\"")
 	hud.toast("%s: %s" % [Soul.PRIEST, lines[_rng.randi_range(0, lines.size() - 1)]])
 
 
 func _offer_communion() -> void:
 	var body := "The bells ring as the priest lifts the Host high over the altar. Soon he turns to you: \"Ecce Agnus Dei. Behold the Lamb of God.\""
-	if not Soul.in_grace(save):
-		body += "\n\nYou are not in a state of grace."
 	ChoiceOverlay.ask(self, "Communion", body, [
 		["Go up and receive", _communion.bind(true)],
 		["Stay in the pew", _communion.bind(false)],
@@ -1173,7 +1190,7 @@ func _offer_communion() -> void:
 
 
 func _communion(receive: bool) -> void:
-	var text := Soul.receive_communion(save) if receive else Soul.spiritual_communion(save)
+	var text := Soul.communion_text(receive)
 	GameLog.good("Received Communion." if receive else "Made a spiritual communion.")
 	_save_now()
 	world.church.set_mass("altar")
@@ -1183,46 +1200,84 @@ func _communion(receive: bool) -> void:
 		_set_busy(false))
 
 
-# Temptation -------------------------------------------------------------------
+# Moments ------------------------------------------------------------------------
 
-func _check_temptation(minutes: float) -> void:
+func _check_moment(minutes: float) -> void:
 	if _busy or _in_church:
 		return
-	_tempt_minutes += minutes
-	if _tempt_minutes < 60.0:
+	_moment_minutes += minutes
+	if _moment_minutes < 60.0:
 		return
-	_tempt_minutes = 0.0
-	var entry := Temptation.roll(save, character, _rng, 1.0)
+	_moment_minutes = 0.0
+	var waiting := not stand.waiting_orders().is_empty() or stand.spots.any(func(c: Variant) -> bool: return c != null and is_instance_valid(c))
+	var entry := Moments.roll(save, _rng, 1.0, waiting)
 	if not entry.is_empty():
-		_tempt(entry)
+		_moment(entry)
 
 
-func _tempt(entry: Dictionary) -> void:
+## A moment: a real choice, put plainly, with no hint of which "pays".
+func _moment(entry: Dictionary) -> void:
 	_set_busy(true)
-	Sound.play("tempt", 0.05, -4.0)
-	var sin_def := GameData.sin_def(entry["sin"])
-	ChoiceOverlay.ask(self, sin_def["sin"], entry["text"], [
-		[entry["give"], _give_in.bind(entry)],
-		["%s (resisting costs stress)" % entry["resist"], _resist.bind(entry)],
-	], Callable(), UiKit.SANCTUARY)
+	Sound.play("beep", 0.05, -12.0)
+	var choices := []
+	for option: Dictionary in entry["options"]:
+		choices.append([option["label"], _choose.bind(option)])
+	ChoiceOverlay.ask(self, "A moment", entry["text"], choices, Callable(), UiKit.VESTMENT_LIGHT)
 
 
-func _give_in(entry: Dictionary) -> void:
-	var result := Temptation.give_in(save, entry)
-	GameLog.bad("Gave in to temptation: %s%s." % [entry.get("sin", "sin"), ", a grave sin" if entry["grave"] else ""])
+func _choose(option: Dictionary) -> void:
+	var result := Moments.choose(save, option, character)
+	var virtue_name: String = GameData.virtue_def(option["virtue"])["name"]
+	if option["kind"] == "good":
+		GameLog.good("%s: %s" % [virtue_name, option["label"]])
+	else:
+		GameLog.bad("Failed in %s: %s" % [virtue_name.to_lower(), option["label"]])
 	if not str(result["cause"]).is_empty():
 		_die(result["cause"])
 		return
 	hud.toast(result["text"])
-	if entry["grave"]:
-		hud.toast("You are no longer in a state of grace.")
+	if not str(result["growth"]).is_empty():
+		hud.toast(result["growth"])
 	_set_busy(false)
 
 
-func _resist(entry: Dictionary) -> void:
-	GameLog.good("Resisted temptation: %s." % entry.get("sin", "sin"))
-	hud.toast(Temptation.resist(save, entry, character))
-	_set_busy(false)
+# The last illness -------------------------------------------------------------------
+
+var _illness_told := false
+
+
+## Old age: when the last illness begins you are told, and may send for the
+## priest; when it has run its course, the end comes.
+func _check_illness() -> void:
+	if _busy or _dead or not Life.ill(save):
+		return
+	if not _illness_told:
+		_illness_told = true
+		_set_busy(true)
+		ChoiceOverlay.ask(self, "The last illness", "Your heart is failing, and you know it. You are %d. There is time, a little, to put things in order." % Life.age(save), [
+			["Send for Father Columba", _send_for_priest],
+		], _set_busy.bind(false), UiKit.LITURGICAL_GOLD)
+		return
+	if Life.illness_over(save):
+		# If you never sent for him, those who love you may have.
+		if int(save["life"]["anointed"]) == 0 and Parish.sacraments_available(save) and _rng.randf() < 0.3 + Life.trust(save) / 200.0:
+			Life.send_for_priest(save)
+		_die("Died in bed, of old age, with the lamp still lit.")
+
+
+func _send_for_priest() -> void:
+	var text := Life.send_for_priest(save)
+	_save_now()
+	NoticeOverlay.show_notice(self, "The last sacraments", text, _set_busy.bind(false))
+
+
+## For the life panel: send for the priest while ill.
+func can_send_for_priest() -> bool:
+	return Life.ill(save) and int(save["life"]["anointed"]) == 0
+
+
+func send_for_priest_from_menu() -> void:
+	_send_for_priest()
 
 
 # Death ------------------------------------------------------------------------
@@ -1235,21 +1290,25 @@ func _die(cause: String) -> void:
 	Sound.stop_ambience()
 	Sound.play_music("requiem")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	hud.fade.color = Color(0.22, 0.0, 0.02, 0.0)
+	# A good death fades to warm dark; a violent one to red.
+	var peaceful := int(save["life"]["anointed"]) > 0
+	hud.fade.color = Color(0.1, 0.07, 0.03, 0.0) if peaceful else Color(0.22, 0.0, 0.02, 0.0)
 	var tween := create_tween()
-	tween.tween_property(hud.fade, "color:a", 0.92, 1.5)
+	tween.tween_property(hud.fade, "color:a", 0.94, 1.5)
 	tween.tween_callback(_show_death.bind(cause))
 
 
 func _show_death(cause: String) -> void:
+	var ending := Life.ending(save, character, cause)
 	var center := CenterContainer.new()
 	add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var column := VBoxContainer.new()
-	column.custom_minimum_size.x = 620
-	column.add_theme_constant_override("separation", 14)
+	column.custom_minimum_size.x = 760
+	column.add_theme_constant_override("separation", 12)
 	center.add_child(column)
-	column.add_child(UiKit.heading("%s is dead." % Saves.current_character().full_name, 64))
-	column.add_child(UiKit.wrapped_label(cause))
-	column.add_child(UiKit.wrapped_label("This life is over. It can never be loaded again.", UiKit.SIZE_BODY, UiKit.ASH))
+	column.add_child(UiKit.heading(ending["title"], 58))
+	for line: String in ending["lines"]:
+		column.add_child(UiKit.wrapped_label(line, UiKit.SIZE_SMALL))
+	column.add_child(UiKit.wrapped_label("This life is over. It can never be loaded again.", UiKit.SIZE_SMALL, UiKit.ASH))
 	column.add_child(UiKit.button("Return to menu", Router.goto.bind("main_menu")))

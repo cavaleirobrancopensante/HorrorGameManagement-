@@ -5,6 +5,22 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.15.0", "date": "11 Nov 2026", "title": "Virtue is the engine",
+		"changes": [
+			"The game is rebuilt around virtue, as Aquinas builds the moral life: on habit. Patience, Honesty, Charity, Fortitude, Temperance and Prudence grow through repeated acts, each one a little easier than the last. You are building something.",
+			"What a virtue gives is ease, never power: patience takes the sting out of insults, honesty brings trust and regulars, charity does more for the parish, fortitude steadies you under threat, temperance slows your needs, prudence brings warnings in time.",
+			"Temptations are gone. In their place are moments: choices between two goods (stay open for the night nurses, or close and rest), or between a hard good and an easy failure. A failure never pays. It costs you, brings no profit, and leaves a regret, like losing your temper.",
+			"No grave-sin buttons, no state-of-grace meter, no rewards for wrongdoing.",
+			"Character creation: instead of marking sins, choose one or two struggles, the virtues that come hard to you. A struggle gives nothing; it only starts lower. Each temperament has a virtue that comes easily.",
+			"Mass, Communion and confession are quiet moments now, not buffs or meters. Confession is mercy: Father Columba welcomes you, and whatever you were carrying is laid down, with no penalty and no counter.",
+			"The horror is human now: the state's attention, informants, inspectors, drones, raids, the knock at night, gangs and thieves. Everything demonic is gone: no faces, no shapes, no night paralysis.",
+			"The parish can live or die. Being at Mass, giving to the new poor box by the church door and standing by Father Columba keep St. Brigid's alive; a weak parish under a watchful state can lose its priest for weeks, or be closed for good.",
+			"A whole life. You age, and from your sixties the end may come: an illness, then death. Send for the priest, and you die with the sacraments. The ending tells how you died, whether the parish outlived you, and the virtues you built.",
+			"At bed you can let a week, a month or a season go by in a summary, living it as your habits would, so that a life can be lived in a game.",
+			"Your life, in the pause menu: your age, your virtues, what you carry, the parish, the street and the state.",
+		],
+	},
+	{
 		"version": "0.14.0", "date": "11 Nov 2026", "title": "Test log and the sign",
 		"changes": [
 			"A test log: press F3, or Test log in the pause menu or Settings. It lists what happened, green for good (served, resisted, confessed), red for bad (customers lost, hurt, gave in), amber for lag, blue for lighting changes and purple for errors in the game itself, with filters and a live frame rate.",

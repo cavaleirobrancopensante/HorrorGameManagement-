@@ -1,6 +1,6 @@
 class_name ChoiceOverlay
 extends Control
-## A moment that needs an answer: a temptation, a confession, Communion. Each
+## A moment that needs an answer: a choice at the hatch, confession, Communion. Each
 ## choice is [button text, what happens]. The back button cannot skip it
 ## unless a cancel action is given.
 

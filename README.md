@@ -1,6 +1,6 @@
 # Daily Bread (working title)
 
-A Catholic horror food-stand game for phones, computers and the browser, made in
+A Catholic food-stand game of virtue under persecution for phones, computers and the browser, made in
 Godot 4.7.2.
 
 Open `project.godot` in Godot 4.7.2 and press Play. The run scene is the main menu.
@@ -34,31 +34,35 @@ state of grace; the Saturday evening vigil counts.
 - Customers show a face and a mood bar. Happier customers tip more. If you are out of something, tell them and they order something else.
 - Everything runs out: meat, rolls, cans, sauce, spray. Deliveries land at the start of the shift after next. Upgrades (street TV, pro griddle, large bottles, neon sign) are on the computer.
 
-## The soul
+## Virtue
 
-- **Temptations** come during the day, one per shift at most, more often when you are stressed. Giving in helps you and eases stress, but goes on your record and pushes the horror toward the demonic. Resisting costs stress, more for the sins you struggle with.
-- **St. Brigid's**: walk there from the sign at the end of the church street (open morning to evening). Hear Mass from the pews, then receive Communion or stay in the pew. Pray at the rail, light a candle, talk to Father Columba.
-- **Confession** every evening and on Saturday afternoon. A full confession restores the state of grace; holding back a grave sin makes it a bad confession.
-- Faithfulness draws the state: a watcher in the church, fines on the way home.
+The game is built around virtue, as Aquinas builds the moral life: on habit (`scripts/core/virtue.gd`).
+
+- **Six virtues**: Patience, Honesty (justice), Charity, Fortitude, Temperance, Prudence. Each act adds a little, less the further the habit has come; a failure takes a little away and leaves a regret. Each temperament has one that comes easily; in creation you choose one or two **struggles**, which start at nothing and grow slowly at first. Struggles give no bonus.
+- **What virtue gives** is ease, never power: patience softens insults, honesty builds trust (more regulars, better tips), charity makes gifts do more for the parish, fortitude steadies fear, temperance slows the needs, prudence brings warnings before raids, gangs and drones.
+- **Moments** (`scripts/core/moments.gd`) replace temptations: a choice between two goods, or between a hard good and an easy failure. The tests check that a failure never gains money, stock, trust or parish, never eases a need, always leaves a regret, and that any moment with a failure keeps the faith out of it.
+- **No grave-sin buttons, no state of grace, no reward for wrongdoing.**
+
+## The parish and the sacraments
+
+- **St. Brigid's** (`scripts/core/parish.gd`): its strength is the life of the community. Mass, the poor box, standing by the priest build it; the persecution wears it down. A weak parish under a watchful state can lose Father Columba for weeks; at nothing, it is closed.
+- **Mass, Communion, confession** are quiet scenes with no meters or buffs (`scripts/core/soul.gd`). Confession is mercy: the regrets you carry are laid down, with no penalty and no counter.
+
+## A life
+
+`scripts/core/life.gd`: you age from the Age you chose (24, 38 or 56). From 62 a last illness may begin each day, more likely each year; send for the priest and you die with the sacraments. The ending tells how you died, whether the parish outlives you, and the virtues you built. At bed you can let a week, a month or a season pass in a summary. The pause menu shows **Your life**.
 
 ## The horror
 
-A director in `scripts/core/horror.gd` rolls every 20 game minutes. The soul's lean picks the side (sin: the demonic; faith: the state; in between, both); the lean, stress and night set the strength. Events need a minimum strength, some only at night, by day, near the mirror or with customers at the hatch, and each has a cooldown. The church is safe. `scripts/world/horror_director.gd` stages them: shapes seen only in the mirror (render layer 32) or only on the cameras, blackouts, the jumpscare face, the drone, the inspector and the raid.
+The horror is human. A director in `scripts/core/horror.gd` rolls every 20 game minutes. The state's **attention** (raised by Mass, confession, helping the priest; lowered by time and by paying the compliance contribution), stress, the years and the night set the strength. Events: drones, someone at your bins seen only on the cameras, surcharges, the knock at night, seized feeds, inspectors, power cuts, a watcher under the lamp, the informant, and raids (a warning in time saves the candles and most stock). The church is safe. Nothing supernatural is shown.
 
 ### Pacing
 
-Small scares build dread; a big scare (blackout, mirror, face, blow, raid, the waking) needs at least two since the last one, then a calm of random length follows (about 1 to 2 days at full strength, longer when calmer). The face is two to five days apart. Simulated over 30 game days (one game day is 24 real minutes):
-
-| Soul | Faces | Big scares | Small a day |
-| --- | --- | --- | --- |
-| Far toward sin, very stressed | about 4 | about 22 | about 5 |
-| Somewhat toward sin | about 4 | about 14 | about 4 |
-| Far toward faith | none | about 12 (state) | about 5 |
-| Balanced and calm | none | none | about 2 |
+Small events build dread; a big one (power cut, raid) needs at least two since the last, then a calm of random length follows. Someone the state ignores, calm, sees nothing big.
 
 ### The night
 
-Close the window shutter before you sleep. Burglars come more for cash, mostly give up at a closed shutter, and can be fought (Endurance, Vigilance) or let be. Leaning toward sin, you may wake unable to move.
+Close the window shutter before you sleep. Burglars come more for cash, mostly give up at a closed shutter, and can be fought (Endurance, Vigilance) or let be.
 
 ## Combat
 
