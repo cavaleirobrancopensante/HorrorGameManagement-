@@ -17,6 +17,7 @@ const WORLD := {
 	"calendar": ["Calendar", "Plan the day: spend a whole shift working, resting, sleeping, praying or at Mass."],
 	"coffee": ["Kettle", "A coffee keeps tiredness off for a while."],
 	"sink": ["Sink", "Drink tap water when you are thirsty."],
+	"wardrobe": ["Wardrobe", "Change your top, trousers, shoes and apron. What you wear shows in the mirror and on the cameras."],
 	"shower": ["Shower", "Wash. Eases stress and tiredness, and takes a quarter of an hour."],
 	"fridge": ["Fridge", "Ready meals, for when you are hungry and the grill is not worth it."],
 	"shelves": ["Stock shelves", "Look here to count what you have left."],

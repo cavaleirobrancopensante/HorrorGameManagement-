@@ -418,6 +418,8 @@ func _prompt_for(target: Interactable) -> String:
 			return "Drink tap water"
 		"shower":
 			return "Take a shower"
+		"wardrobe":
+			return "Change clothes"
 		"bed":
 			return "Sleep"
 		"altar":
@@ -508,6 +510,9 @@ func _interact() -> void:
 			_eat()
 		"shower":
 			_shower()
+		"wardrobe":
+			_set_busy(true)
+			WardrobePanel.open(self, character)
 		"coffee":
 			if Survival.take_stock(save, "coffee"):
 				Survival.change_need(save, "tiredness", -20.0)
@@ -842,6 +847,21 @@ func set_feeds_live(on: bool) -> void:
 
 func on_computer_closed() -> void:
 	_set_busy(false)
+
+
+## Back from the wardrobe: look is the new appearance, or empty if cancelled.
+func on_wardrobe_closed(look: Dictionary) -> void:
+	_set_busy(false)
+	if look.is_empty() or look == character.appearance:
+		return
+	character.appearance = look.duplicate()
+	save["character"] = character.to_dict()
+	if body != null:
+		body.queue_free()
+		body = null
+	_make_body()
+	Sound.play("door", 0.2, -10.0)
+	hud.toast("You change your clothes.")
 
 
 # Tooltips ---------------------------------------------------------------------

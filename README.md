@@ -72,7 +72,9 @@ Everyone is built from Quaternius's CC0 Ultimate Modular Men and Women packs (`a
 
 ## Help and tooltips
 
-Every menu and creation control has a tooltip (`UiKit.tip`), also shown in a help line at the bottom for touch screens. In the game, holding the crosshair on something for about two thirds of a second shows what it is; the texts live in `scripts/core/tips.gd`. Character creation picks face, top, trousers and shoes from the outfit parts (`GameData.BODY_PARTS`) and shows the result in 3D.
+Every menu and creation control has a tooltip (`UiKit.tip`), also shown in a help line at the bottom for touch screens. In the game, holding the crosshair on something for about two thirds of a second shows what it is; the texts live in `scripts/core/tips.gd`. Character creation picks face, top, trousers and shoes from the outfit parts (`GameData.BODY_PARTS`) and shows the result in 3D (`LookPreview`). The wardrobe at home (`WardrobePanel`) changes clothes and apron later.
+
+The apron (`People._apron`) is draped over the body's own surface, skinned on the CPU, and narrowed to stay clear of the arms. Checked against every pose and action: no arm passes through it.
 
 ## Picture
 

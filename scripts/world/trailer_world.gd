@@ -664,6 +664,7 @@ func _build_home() -> void:
 	# Wardrobe and rug.
 	_span(Vector3(6.04, 0.0, 2.4), Vector3(6.64, 1.9, WIDTH), wood)
 	_span(Vector3(6.64, 0.05, 2.79), Vector3(6.645, 1.85, 2.81), _c("#1e1612"), false)
+	_zone(Vector3(6.02, 0.0, 2.38), Vector3(6.68, 1.9, WIDTH), "wardrobe")
 	_span(Vector3(6.8, 0.0, 1.0), Vector3(8.9, 0.006, 2.2), _m("rug"), false)
 
 	# Home altar in the corner by the bathroom.

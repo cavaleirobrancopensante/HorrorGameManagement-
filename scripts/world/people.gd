@@ -235,9 +235,7 @@ static func _extra(rig: PersonRig, extra: String, recipe: Dictionary) -> void:
 		"face_cloth":
 			rig.attach("Head", _box(Vector3(0.17, 0.09, 0.04), Vector3(0.0, 0.02, -0.1), Color(recipe.get("cloth_colour", "#1e1d22"))))
 		"apron":
-			var apron := Node3D.new()
-			apron.add_child(_box(Vector3(0.34, 0.62, 0.015), Vector3(0.0, -0.18, -0.13), Color(recipe.get("apron_colour", "#d8d0bc"))))
-			rig.attach("Hips", apron)
+			_apron(rig, recipe)
 		"brim_hat":
 			var hat := Node3D.new()
 			hat.add_child(_rod(0.17, 0.015, Vector3(0.0, 0.2, 0.0), Vector3.ZERO, colour))
@@ -251,6 +249,319 @@ static func _extra(rig: PersonRig, extra: String, recipe: Dictionary) -> void:
 			rig.attach("Head", cap)
 		"beanie":
 			rig.attach("Head", _shell([Vector2(0.12, 0.0), Vector2(0.12, 0.112), Vector2(0.2, 0.105), Vector2(0.26, 0.06), Vector2(0.27, 0.0)], 12, colour))
+
+
+# Aprons -----------------------------------------------------------------------
+
+## Where a bone sits in the rig's frame (metres, forward -Z).
+static func _bone_point(rig: PersonRig, bone: String) -> Vector3:
+	var skeleton := rig.skeleton
+	skeleton.force_update_all_bone_transforms()
+	var world := skeleton.global_transform * skeleton.get_bone_global_pose(skeleton.find_bone(bone))
+	return rig.global_transform.affine_inverse() * world.origin
+
+
+## A flat strap from a to b (rig frame), relative to origin.
+static func _strap(a: Vector3, b: Vector3, width: float, origin: Vector3, colour: Color) -> MeshInstance3D:
+	var length := a.distance_to(b)
+	var node := _box(Vector3(width, 0.006, length), (a + b) * 0.5 - origin, colour)
+	var direction := (b - a).normalized()
+	# The flat side faces out: forward on straps that run up and down, up on
+	# straps that lie over the shoulders.
+	var up := Vector3.FORWARD if absf(direction.y) > 0.7 else Vector3.UP
+	node.basis = Basis.looking_at(direction, up)
+	return node
+
+
+## The arms hang this far out (degrees) on anyone wearing an apron: men,
+## women (narrower shoulders, so a little more).
+const APRON_ARM_OUT := {"man": 9.0, "woman": 13.5}
+## The thickness of each arm part, for keeping the apron clear of it.
+const ARM_RADIUS := {"UpperArm": 0.05, "LowerArm": 0.042, "Hand": 0.038}
+const NOT_TORSO := ["Shoulder", "Arm", "Hand", "Index", "Middle", "Ring", "Pinky", "Thumb", "Head", "Neck"]
+
+
+## The body's surface without arms or head, posed as the rig stands now, in the
+## rig's frame. Skinned here on the CPU so it works without a renderer.
+static func _torso_points(rig: PersonRig) -> PackedVector3Array:
+	var skeleton := rig.skeleton
+	skeleton.force_update_all_bone_transforms()
+	var to_rig := rig.global_transform.affine_inverse() * skeleton.global_transform
+	var points := PackedVector3Array()
+	for mesh_instance: MeshInstance3D in skeleton.find_children("*", "MeshInstance3D", true, false):
+		if mesh_instance.name.ends_with("_Head") or mesh_instance.name.ends_with("_Feet") or mesh_instance.skin == null or not mesh_instance.visible:
+			continue
+		var skin := mesh_instance.skin
+		var poses: Array[Transform3D] = []
+		var names: Array[String] = []
+		for i in skin.get_bind_count():
+			var bone := skin.get_bind_bone(i)
+			if bone < 0:
+				bone = skeleton.find_bone(skin.get_bind_name(i))
+			poses.append(skeleton.get_bone_global_pose(bone) * skin.get_bind_pose(i))
+			names.append(skeleton.get_bone_name(bone))
+		var mesh: Mesh = mesh_instance.mesh
+		for surface in mesh.get_surface_count():
+			var arrays := mesh.surface_get_arrays(surface)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+			var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+			var per := bones.size() / maxi(vertices.size(), 1)
+			var posed_all := PackedVector3Array()
+			var keep := PackedByteArray()
+			posed_all.resize(vertices.size())
+			keep.resize(vertices.size())
+			for v in vertices.size():
+				var heaviest := 0
+				for k in per:
+					if weights[v * per + k] > weights[v * per + heaviest]:
+						heaviest = k
+				var dominant: String = names[bones[v * per + heaviest]]
+				keep[v] = 0 if NOT_TORSO.any(func(word: String) -> bool: return dominant.contains(word)) else 1
+				var posed := Vector3.ZERO
+				for k in per:
+					var weight := weights[v * per + k]
+					if weight > 0.0:
+						posed += (poses[bones[v * per + k]] * vertices[v]) * weight
+				posed_all[v] = to_rig * posed
+			# Sample across each face too: low-poly faces are long, and the
+			# corners alone leave gaps a hand's width high.
+			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+			if indices.is_empty():
+				for v in vertices.size():
+					indices.append(v)
+			for t in range(0, indices.size() - 2, 3):
+				var a := indices[t]
+				var b := indices[t + 1]
+				var c := indices[t + 2]
+				if keep[a] == 0 or keep[b] == 0 or keep[c] == 0:
+					continue
+				var pa := posed_all[a]
+				var pb := posed_all[b]
+				var pc := posed_all[c]
+				var n := clampi(ceili(maxf(pa.distance_to(pb), maxf(pb.distance_to(pc), pc.distance_to(pa))) / 0.025), 1, 10)
+				for i in n + 1:
+					for j in n + 1 - i:
+						var u := float(i) / n
+						var w := float(j) / n
+						points.append(pa * (1.0 - u - w) + pb * u + pc * w)
+	return points
+
+
+## Points along both arms as they hang now, each with its thickness.
+static func _arm_points(rig: PersonRig) -> Array:
+	var out := []
+	for side in ["L", "R"]:
+		var upper := _bone_point(rig, "UpperArm." + side)
+		var lower := _bone_point(rig, "LowerArm." + side)
+		var hand := _bone_point(rig, "Hand." + side)
+		var tip := hand + (hand - lower).normalized() * 0.1
+		for part: Array in [[upper, lower, "UpperArm"], [lower, hand, "LowerArm"], [hand, tip, "Hand"]]:
+			for i in 7:
+				out.append([(part[0] as Vector3).lerp(part[1], i / 6.0), ARM_RADIUS[part[2]]])
+	return out
+
+
+## The front of the body at (x, y): the most forward point within reach, so
+## the cloth bridges hollows and the gap between the legs as cloth would.
+## points may be a PackedVector3Array or a _binned grid of them.
+static func _front_at(points, x: float, y: float, reach_x: float, reach_y: float) -> float:
+	var front := INF
+	if points is Dictionary:
+		for bx in range(floori((x - reach_x) / BIN), floori((x + reach_x) / BIN) + 1):
+			for by in range(floori((y - reach_y) / BIN), floori((y + reach_y) / BIN) + 1):
+				for p: Vector3 in points.get(Vector2i(bx, by), []):
+					if absf(p.x - x) <= reach_x and absf(p.y - y) <= reach_y:
+						front = minf(front, p.z)
+		return front
+	for p: Vector3 in points:
+		if absf(p.x - x) <= reach_x and absf(p.y - y) <= reach_y:
+			front = minf(front, p.z)
+	return front
+
+
+const BIN := 0.04
+
+
+static func _binned(points: PackedVector3Array) -> Dictionary:
+	var bins := {}
+	for p in points:
+		var key := Vector2i(floori(p.x / BIN), floori(p.y / BIN))
+		if not bins.has(key):
+			bins[key] = []
+		bins[key].append(p)
+	return bins
+
+
+## How wide the cloth may be at height y: inside the body's sides and clear
+## of every arm hanging beside it.
+static func _width_at(points: PackedVector3Array, arms: Array, y: float, wanted: float) -> float:
+	var body := 0.0
+	for p in points:
+		if absf(p.y - y) <= 0.03:
+			body = maxf(body, absf(p.x))
+	var width := minf(wanted, body * 0.86)
+	for arm: Array in arms:
+		var p: Vector3 = arm[0]
+		if absf(p.y - y) <= arm[1] + 0.03:
+			width = minf(width, absf(p.x) - arm[1] - 0.022)
+	return maxf(width, 0.06)
+
+
+## A sheet of cloth laid over the front of the body. rows is [[height,
+## half width]]; the cloth stands gap in front of the body and is smoothed so
+## it hangs rather than clings. Built relative to origin; coloured per row.
+static func _draped(points, rows: Array, columns: int, gap: float, extra_at: Callable, origin: Vector3, colour_at: Callable) -> MeshInstance3D:
+	var grid := []
+	for r in rows.size():
+		var y: float = rows[r][0]
+		var half: float = rows[r][1]
+		var line := []
+		for c in columns + 1:
+			var x := lerpf(-half, half, float(c) / columns)
+			line.append(Vector3(x, y, _front_at(points, x, y, 0.06, 0.035)))
+		# Smooth across, never moving the cloth behind the body.
+		var smooth := []
+		for c in line.size():
+			var a: Vector3 = line[maxi(c - 1, 0)]
+			var b: Vector3 = line[c]
+			var d: Vector3 = line[mini(c + 1, line.size() - 1)]
+			smooth.append(minf(b.z, (a.z + b.z * 2.0 + d.z) / 4.0))
+		for c in line.size():
+			var v: Vector3 = line[c]
+			v.z = smooth[c] - gap - float(extra_at.call(r))
+			line[c] = v - origin
+		grid.append(line)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for r in grid.size() - 1:
+		var colour: Color = colour_at.call(r)
+		for c in columns:
+			for corner in [grid[r][c], grid[r + 1][c], grid[r][c + 1], grid[r][c + 1], grid[r + 1][c], grid[r + 1][c + 1]]:
+				st.set_color(colour)
+				st.add_vertex(corner)
+	st.generate_normals()
+	var node := MeshInstance3D.new()
+	node.mesh = st.commit()
+	var material := StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.roughness = 0.85
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	node.material_override = material
+	return node
+
+
+## A band hugging the body all the way round at height y.
+static func _band(points: PackedVector3Array, y: float, height: float, centre: Vector3, origin: Vector3, colour: Color) -> MeshInstance3D:
+	var segments := 28
+	var radius := []
+	for j in segments:
+		radius.append(0.0)
+	for p in points:
+		if absf(p.y - y) <= height:
+			var flat := Vector2(p.x - centre.x, p.z - centre.z)
+			var j := int(posmod(flat.angle(), TAU) / TAU * segments) % segments
+			radius[j] = maxf(radius[j], flat.length())
+	for j in segments:
+		if radius[j] == 0.0:
+			radius[j] = maxf(radius[(j + segments - 1) % segments], radius[(j + 1) % segments])
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for j in segments:
+		var corners := []
+		for k in [j, (j + 1) % segments]:
+			var angle := (float(k) + 0.5) * TAU / segments
+			var r: float = radius[k] + 0.007
+			var at := Vector3(centre.x + cos(angle) * r - origin.x, 0.0, centre.z + sin(angle) * r - origin.z)
+			corners.append(at + Vector3(0.0, y + height * 0.5 - origin.y, 0.0))
+			corners.append(at + Vector3(0.0, y - height * 0.5 - origin.y, 0.0))
+		for corner in [corners[0], corners[1], corners[2], corners[2], corners[1], corners[3]]:
+			st.set_color(colour)
+			st.add_vertex(corner)
+	st.generate_normals()
+	var node := MeshInstance3D.new()
+	node.mesh = st.commit()
+	var material := StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.roughness = 0.85
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	node.material_override = material
+	return node
+
+
+## A butcher's bib apron: a bib from the chest, a skirt to the knee with a
+## darker hem, a neck strap, and a waistband tied at the back. It is laid over
+## the body's own shape, kept inside the line of the arms, and the arms hang a
+## little wider, so no arm passes through it in any pose. The skirt hangs from
+## the hips and the bib from the torso, so both move with the body.
+static func _apron(rig: PersonRig, recipe: Dictionary) -> void:
+	var cloth := Color(recipe.get("apron_colour", "#d8d0bc"))
+	var hem_colour := cloth.darkened(0.12)
+	var band_colour := cloth.darkened(0.08)
+	rig.arm_out = APRON_ARM_OUT.get(recipe.get("sex", "man"), 9.0)
+	rig._apply(0.0)
+	var points := _torso_points(rig)
+	var grid := _binned(points)
+	var arms := _arm_points(rig)
+	var hips := _bone_point(rig, "Hips")
+	var torso := _bone_point(rig, "Torso")
+	var chest := _bone_point(rig, "Chest")
+	var neck := _bone_point(rig, "Neck")
+	var knee := _bone_point(rig, "LowerLeg.L")
+	var waist := _bone_point(rig, "Abdomen").y + 0.04
+
+	# The skirt, from the waist to just above the knee, standing a little
+	# further off the body as it falls, so the legs can move behind it.
+	var skirt := Node3D.new()
+	skirt.name = "Apron"
+	var rows := []
+	var steps := 8
+	for k in steps + 1:
+		var y := lerpf(waist, knee.y + 0.03, float(k) / steps)
+		rows.append([y, _width_at(points, arms, y, 0.2)])
+	var flare := func(r: int) -> float: return 0.035 * float(r) / steps
+	var sheet := _draped(grid, rows, 14, 0.012, flare, hips, func(r: int) -> Color: return hem_colour if r == steps - 1 else cloth)
+	# Hung from a hinge at the front of the waist, so it can swing forward
+	# with the leading thigh as they walk.
+	var hinge := Node3D.new()
+	hinge.position = Vector3(0.0, waist, _front_at(grid, 0.0, waist, 0.06, 0.035)) - hips
+	sheet.position = -hinge.position
+	hinge.add_child(sheet)
+	skirt.add_child(hinge)
+	rig.apron_swing = hinge
+	# The waistband round the body, and its ties hanging at the back.
+	skirt.add_child(_band(points, waist, 0.04, hips, hips, band_colour))
+	var back := -INF
+	for p in points:
+		if absf(p.y - waist) < 0.03 and absf(p.x) < 0.05:
+			back = maxf(back, p.z)
+	for side in [-1.0, 1.0]:
+		var tail := _box(Vector3(0.035, 0.24, 0.006), Vector3(side * 0.035, waist - 0.13, back + 0.014) - hips, band_colour)
+		tail.rotation.z = side * 0.18
+		skirt.add_child(tail)
+	rig.attach("Hips", skirt)
+
+	# The bib, from the waist up over the chest, narrowing.
+	var bib := Node3D.new()
+	bib.name = "ApronBib"
+	var bib_top := chest.y + 0.04
+	var bib_rows := []
+	for k in 7:
+		var t := float(k) / 6
+		var y := lerpf(waist + 0.01, bib_top, t)
+		bib_rows.append([y, _width_at(points, arms, y, lerpf(0.15, 0.1, t))])
+	var bib_sheet := _draped(grid, bib_rows, 12, 0.01, func(_r: int) -> float: return 0.0, torso, func(_r: int) -> Color: return cloth)
+	bib.add_child(bib_sheet)
+	# The strap round the neck, from the bib's top corners.
+	var top: Array = bib_rows[6]
+	for side in [-1.0, 1.0]:
+		var x: float = side * top[1]
+		var corner := Vector3(x, bib_top, _front_at(grid, x, bib_top, 0.06, 0.035) - 0.01)
+		var collar := Vector3(side * 0.065, neck.y + 0.01, neck.z - 0.02)
+		var nape := Vector3(0.0, neck.y + 0.02, neck.z + 0.06)
+		bib.add_child(_strap(corner, collar, 0.022, torso, band_colour))
+		bib.add_child(_strap(collar, nape, 0.022, torso, band_colour))
+	rig.attach("Torso", bib)
 
 
 ## Builds a person, puts them in parent at a point facing yaw, and finishes them.

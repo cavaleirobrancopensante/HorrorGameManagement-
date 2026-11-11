@@ -29,12 +29,7 @@ var _summary: Label
 var _status: Label
 var _error := ""
 
-var _preview_world: SubViewport
-var _preview_holder: Node3D
-var _preview_rig: PersonRig
-var _preview_look := ""
-var _preview_turn := PI + 0.35
-var _dragging := false
+var _preview: LookPreview
 
 
 func _ready() -> void:
@@ -91,7 +86,7 @@ func _build() -> void:
 	right.add_child(help)
 
 
-## Your character in 3D, turning. Drag to turn them yourself.
+## Your character in 3D, turning (LookPreview), with the summary under it.
 func _build_preview() -> Control:
 	var column := VBoxContainer.new()
 	column.custom_minimum_size.x = 340
@@ -104,53 +99,10 @@ func _build_preview() -> Control:
 	top.add_child(UiKit.tip(random_all, Tips.CREATION["randomize_all"]))
 	column.add_child(top)
 
-	var frame := SubViewportContainer.new()
-	frame.stretch = true
-	frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	frame.mouse_filter = Control.MOUSE_FILTER_STOP
-	frame.gui_input.connect(_on_preview_input)
-	UiKit.tip(frame, Tips.CREATION["preview"])
-	column.add_child(frame)
-	_preview_world = SubViewport.new()
-	_preview_world.own_world_3d = true
-	_preview_world.transparent_bg = false
-	frame.add_child(_preview_world)
-	var environment := WorldEnvironment.new()
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color("#1c1426")
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#8a7a96")
-	env.ambient_light_energy = 0.7
-	environment.environment = env
-	_preview_world.add_child(environment)
-	var key := DirectionalLight3D.new()
-	key.rotation_degrees = Vector3(-35.0, -30.0, 0.0)
-	key.light_energy = 1.1
-	key.light_color = Color("#ffe2b8")
-	_preview_world.add_child(key)
-	var rim := OmniLight3D.new()
-	rim.position = Vector3(-1.2, 2.2, -1.2)
-	rim.light_color = Color("#a07ad0")
-	rim.light_energy = 1.4
-	rim.omni_range = 5.0
-	_preview_world.add_child(rim)
-	var floor_disc := MeshInstance3D.new()
-	var disc := CylinderMesh.new()
-	disc.top_radius = 0.6
-	disc.bottom_radius = 0.6
-	disc.height = 0.04
-	floor_disc.mesh = disc
-	floor_disc.position.y = -0.02
-	floor_disc.material_override = TextureFactory.plain(Color("#2b1b3a"))
-	_preview_world.add_child(floor_disc)
-	var camera := Camera3D.new()
-	camera.position = Vector3(0.0, 1.05, 2.9)
-	camera.rotation_degrees.x = -4.0
-	camera.fov = 42.0
-	_preview_world.add_child(camera)
-	_preview_holder = Node3D.new()
-	_preview_world.add_child(_preview_holder)
+	_preview = LookPreview.new()
+	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	UiKit.tip(_preview, Tips.CREATION["preview"])
+	column.add_child(_preview)
 
 	_summary = UiKit.wrapped_label("", UiKit.SIZE_SMALL, UiKit.TALLOW)
 	_summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -223,45 +175,8 @@ func _build_looks_page() -> Control:
 	grid.add_theme_constant_override("v_separation", 8)
 	column.add_child(grid)
 	for id: String in LOOKS:
-		grid.add_child(_make_chooser(id))
+		grid.add_child(LookPreview.chooser(character, id, _refresh, _refreshers))
 	return column
-
-
-## "Label  ‹  value  ›": each arrow steps through the choices.
-func _make_chooser(id: String) -> Control:
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", 4)
-	var label := UiKit.label(GameData.appearance_def(id)["label"], UiKit.SIZE_SMALL, UiKit.ASH)
-	label.custom_minimum_size.x = 130
-	label.mouse_filter = Control.MOUSE_FILTER_STOP
-	UiKit.tip(label, Tips.CREATION.get(id, ""))
-	row.add_child(label)
-	var left := UiKit.button("‹", _cycle.bind(id, -1), 64)
-	left.add_theme_font_size_override("font_size", 34)
-	row.add_child(UiKit.tip(left, Tips.CREATION.get(id, "")))
-	var value := UiKit.label("")
-	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	value.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	row.add_child(value)
-	var right := UiKit.button("›", _cycle.bind(id, 1), 64)
-	right.add_theme_font_size_override("font_size", 34)
-	row.add_child(UiKit.tip(right, Tips.CREATION.get(id, "")))
-	_refreshers.append(func() -> void:
-		value.text = GameData.option_name(id, character.appearance[id], character.appearance["sex"]))
-	return row
-
-
-func _cycle(id: String, direction: int) -> void:
-	var options := GameData.options_for(id, character.appearance["sex"])
-	var index := 0
-	for i in options.size():
-		if options[i][0] == character.appearance[id]:
-			index = i
-	character.appearance[id] = options[posmod(index + direction, options.size())][0]
-	character.normalize_appearance()
-	_refresh()
 
 
 func _on_name_changed(text: String) -> void:
@@ -478,40 +393,6 @@ func _change_point(id: String, delta: int) -> void:
 	_refresh()
 
 
-# The preview --------------------------------------------------------------------
-
-func _process(delta: float) -> void:
-	if _preview_rig == null:
-		return
-	if not _dragging:
-		_preview_turn = lerp_angle(_preview_turn, PI + 0.35 + sin(Time.get_ticks_msec() / 2400.0) * 0.25, delta * 1.5)
-	_preview_holder.rotation.y = _preview_turn
-
-
-func _on_preview_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		_dragging = event.pressed
-	elif event is InputEventScreenTouch:
-		_dragging = event.pressed
-	elif event is InputEventMouseMotion and _dragging:
-		_preview_turn += (event as InputEventMouseMotion).relative.x * 0.012
-	elif event is InputEventScreenDrag:
-		_preview_turn += (event as InputEventScreenDrag).relative.x * 0.012
-
-
-## Builds the 3D figure again when the looks change.
-func _update_preview() -> void:
-	var recipe := People.player(character)
-	var key := str(recipe)
-	if key == _preview_look:
-		return
-	_preview_look = key
-	if _preview_rig != null:
-		_preview_rig.queue_free()
-	_preview_rig = People.place(_preview_holder, recipe, Vector3.ZERO, 0.0)
-	_preview_rig.rotation.y = 0.0
-
-
 # Steps --------------------------------------------------------------------------
 
 func _show_step(index: int) -> void:
@@ -608,7 +489,7 @@ func _refresh() -> void:
 	var last := _step == STEPS.size() - 1
 	_next_button.text = "Begin  ›" if last else "Next  ›"
 	_next_button.tooltip_text = Tips.CREATION["begin"] if last else Tips.CREATION["next"]
-	_update_preview()
+	_preview.show_recipe(People.player(character))
 	_refresh_status()
 
 
