@@ -26,6 +26,9 @@ var is_down := false
 var _cooldown := 1.0
 var _hover := 0.0
 var _gave_up := 0.0
+## The body, for people: built from the people kit and animated as they move.
+var rig: PersonRig
+var recipe: Dictionary
 var _stuck := 0.0
 
 
@@ -52,9 +55,11 @@ static func create(owner_game: TrailerGame, enemy_kind: String) -> Enemy:
 		capsule.height = 1.7
 		shape.shape = capsule
 		shape.position.y = 0.85
-		var shirt: String = "#1c1d22" if enemy_kind == "burglar" else ("#4a2a22" if enemy_kind == "shooter" else ["#2a2d36", "#3b2a26", "#26332b"].pick_random())
-		enemy.figure = owner_game.world.church._person(shirt, false)
-		enemy.figure.get_parent().remove_child(enemy.figure)
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		enemy.recipe = People.role(enemy_kind, rng)
+		enemy.rig = People.build(enemy.recipe)
+		enemy.figure = enemy.rig
 	enemy.add_child(shape)
 	enemy.add_child(enemy.figure)
 	enemy.add_to_group("enemies")
@@ -96,6 +101,11 @@ static func _drone_body() -> Node3D:
 	return drone
 
 
+func _ready() -> void:
+	if rig != null:
+		People.finish(rig, recipe)
+
+
 static func inside(point: Vector3) -> bool:
 	return point.x > 0.0 and point.x < TrailerWorld.LENGTH and point.z > 0.0 and point.z < TrailerWorld.WIDTH and point.y > -0.2
 
@@ -104,6 +114,8 @@ func _physics_process(delta: float) -> void:
 	if is_down or game == null or game.save.is_empty():
 		return
 	_cooldown -= delta
+	if rig != null:
+		rig.speed = Vector2(velocity.x, velocity.z).length()
 	var target := _target()
 	if kind == "drone":
 		_fly(target, delta)
@@ -210,6 +222,8 @@ func _walk(target: Vector3, delta: float) -> void:
 	if not inside(global_position) and not door.is_open and global_position.distance_to(DOOR_OUTSIDE) < 0.9 and inside(game.player.global_position):
 		flat = Vector3.ZERO
 		door.bash(delta * 7.0)
+		if rig != null and not rig.is_acting():
+			rig.act("bash", 0.6)
 	if target == global_position:
 		flat = Vector3.ZERO
 		look_at(Vector3(game.player.global_position.x, global_position.y, game.player.global_position.z), Vector3.UP)
@@ -277,10 +291,14 @@ func _try_attack() -> void:
 		_spark_line(camera, Color("#8fd0ff"))
 		game.hurt(float(stats["damage"]), "A Civic enforcement drone. The report called it a cardiac event.")
 	elif kind == "shooter":
+		if rig != null:
+			rig.act("aim", 0.7)
 		Sound.play("bang", 0.1)
 		_spark_line(camera, Color("#ffd27a"))
 		game.hurt(float(stats["damage"]), "Shot through your own window.")
 	else:
+		if rig != null:
+			rig.act("swing", 0.5)
 		Sound.play("hit", 0.15)
 		game.hurt(float(stats["damage"]), "They beat you to death in your own trailer.")
 
@@ -303,6 +321,8 @@ func hit(amount: float, from: Vector3) -> void:
 		return
 	health -= amount
 	_flash()
+	if rig != null:
+		rig.act("hurt", 0.4)
 	var push := (global_position - from)
 	push.y = 0.0
 	velocity += push.normalized() * (2.5 if kind == "drone" else 3.5)

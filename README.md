@@ -66,6 +66,14 @@ R, the mouse wheel or the Arm button cycles bat, slingshot and empty hands; with
 
 Gangs come some nights (thugs bash the door; shooters fire through open windows and the hatch). Civic drones hunt the faithful through any opening, and ram the shutter or door when everything is shut. Closing up takes range away from both sides and forces a fight at the door. Barricade it with the planks on the freezer lid for three times the bashing. A compliance contribution on the computer's Standing tab keeps the state away for three days. Rules: `scripts/core/combat.gd`; enemies: `scripts/world/enemy.gd`; weapons: `scripts/world/fighter.gd`.
 
+## People
+
+Everyone is built from Quaternius's CC0 Ultimate Modular Men and Women packs (`assets/people/`, see its LICENSE.md). Each outfit has Head, Body, Legs and Feet on one skeleton, so `scripts/world/people.gd` mixes parts across outfits, recolours skin, hair and clothes, and adds code-made extras (cassock, headscarf, hood, face cloth, hats, apron, props). `scripts/world/person_rig.gd` animates them in code: it finds each joint's turning axes itself, then drives walking, paying, eating, holding, swinging, aiming, bashing, flinching and falling.
+
+## Picture
+
+Settings has Sharp, Crisp (default) and Retro, for the size of the game's pixels. Textures are generated in code at four times their old detail with grime and relief maps.
+
 ## Patch notes
 
 The version is on the main menu; press it for every patch's changes. They live in `scripts/core/changelog.gd`, and its first entry must match `config/version` in `project.godot`.

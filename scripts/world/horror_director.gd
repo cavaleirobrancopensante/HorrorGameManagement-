@@ -182,14 +182,12 @@ func run(event: Dictionary) -> void:
 			Sound.play("beep")
 			game.hud.toast(text)
 		"inspector":
-			var inspector: Node3D = game.world.church._person("#4a4d52", false)
-			inspector.position = Vector3(1.75, TrailerWorld.GROUND, 3.95)
+			var inspector: Node3D = People.place(game.world, People.role("inspector", _rng), Vector3(1.75, TrailerWorld.GROUND, 3.95), 0.0)
 			game.hud.toast(text)
 			get_tree().create_timer(3.0).timeout.connect(game.world.set_hatch_open.bind(false, true))
 			get_tree().create_timer(8.0).timeout.connect(inspector.queue_free)
 		"informant":
-			var man: Node3D = game.world.church._person("#55575c", false)
-			man.position = ACROSS_STREET
+			var man: Node3D = People.place(game.world, People.role("informant", _rng), ACROSS_STREET, 0.0)
 			get_tree().create_timer(180.0).timeout.connect(man.queue_free)
 			game.hud.toast(text)
 		"raid":

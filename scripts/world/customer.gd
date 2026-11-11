@@ -17,6 +17,9 @@ var leaving := false
 var has_food := false
 var has_can := false
 var _tween: Tween
+## The body: a person from the people kit, and how they were made.
+var rig: PersonRig
+var recipe: Dictionary
 
 
 static func create(look_rng: RandomNumberGenerator, wanted: Dictionary, start_mood: float, mood_decay: float) -> Customer:
@@ -25,31 +28,9 @@ static func create(look_rng: RandomNumberGenerator, wanted: Dictionary, start_mo
 	customer.mood = start_mood
 	customer.decay = mood_decay
 
-	var person := PlayerCharacter.new()
-	person.randomize_appearance(look_rng)
-	var canvas := SubViewport.new()
-	canvas.size = Vector2i(80, 320)
-	canvas.transparent_bg = true
-	canvas.disable_3d = true
-	canvas.render_target_update_mode = SubViewport.UPDATE_ONCE
-	var portrait := CharacterPortrait.new()
-	portrait.full_body = true
-	portrait.apron = false
-	portrait.shirt_colour = Color(SHIRTS[look_rng.randi_range(0, SHIRTS.size() - 1)])
-	portrait.size = Vector2(80, 320)
-	portrait.character = person
-	canvas.add_child(portrait)
-	customer.add_child(canvas)
-
-	var sprite := Sprite3D.new()
-	sprite.texture = canvas.get_texture()
-	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-	sprite.shaded = true
-	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	sprite.pixel_size = Player.BODY_PIXEL_SIZE
-	sprite.position.y = 320.0 * Player.BODY_PIXEL_SIZE / 2.0
-	customer.add_child(sprite)
+	customer.recipe = People.stranger(look_rng)
+	customer.rig = People.build(customer.recipe)
+	customer.add_child(customer.rig)
 
 	# What the player looks at to hand food over.
 	var reach := Interactable.new()
@@ -66,9 +47,31 @@ static func create(look_rng: RandomNumberGenerator, wanted: Dictionary, start_mo
 	return customer
 
 
+func _ready() -> void:
+	People.finish(rig, recipe)
+
+
+func _process(_delta: float) -> void:
+	if rig == null:
+		return
+	var walking := _tween != null and _tween.is_running()
+	rig.speed = WALK_SPEED if walking else 0.0
+	if not walking and at_hatch and not leaving:
+		rotation.y = lerp_angle(rotation.y, 0.0, 0.2)
+
+
+## Reaching out with the money, or taking the food.
+func pay() -> void:
+	if rig != null:
+		rig.act("pay", 0.8)
+
+
 func walk_to(target: Vector3, then: Callable = Callable()) -> void:
 	if _tween:
 		_tween.kill()
+	var flat := Vector3(target.x, global_position.y if is_inside_tree() else position.y, target.z)
+	if is_inside_tree() and flat.distance_to(global_position) > 0.1:
+		look_at(flat, Vector3.UP)
 	_tween = create_tween()
 	var seconds := position.distance_to(target) / WALK_SPEED
 	_tween.tween_property(self, "position", target, seconds)

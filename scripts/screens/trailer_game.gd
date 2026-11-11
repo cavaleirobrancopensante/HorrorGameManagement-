@@ -5,7 +5,6 @@ extends Control
 
 const MOUSE_SPEED := 0.0025
 const AUTOSAVE_SECONDS := 90.0
-const PIXEL_SCALE := 3
 
 var save: Dictionary
 var world: TrailerWorld
@@ -30,8 +29,9 @@ var _last_piece := ""
 var _shift := -1
 var _rng := RandomNumberGenerator.new()
 ## The figure the mirror and the cameras see, and the canvas it is drawn on.
-var _body_portrait: CharacterPortrait
-var _body_canvas: SubViewport
+## Your body for the mirror and the cameras, and what it holds.
+var body: PersonRig
+var _body_prop: Node3D
 var _body_look := ""
 ## Game minutes since the last roll for a temptation.
 var _tempt_minutes := 0.0
@@ -63,7 +63,8 @@ func _ready() -> void:
 func _build() -> void:
 	var container := SubViewportContainer.new()
 	container.stretch = true
-	container.stretch_shrink = PIXEL_SCALE
+	container.stretch_shrink = Settings.pixel_scale
+	Settings.picture_changed.connect(func() -> void: container.stretch_shrink = Settings.pixel_scale)
 	container.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(container)
@@ -80,7 +81,7 @@ func _build() -> void:
 	var look: Dictionary = character.appearance
 	player.arm.dress(Color(GameData.SKIN_TONES.get(look["skin"], "#c79a6e")), Color("#4b4a55"))
 	world.mirror.viewer = player.camera
-	player.body_sprite.texture = _make_body_texture()
+	_make_body()
 	player.stepped.connect(func() -> void: Sound.play("step", 0.12, -8.0))
 
 	hud = GameHud.new()
@@ -109,41 +110,56 @@ func _build() -> void:
 	_set_busy(false)
 
 
-## Draws the character head to feet, for the mirror and the cameras. It is
-## drawn again only when the arm or what it holds changes.
-func _make_body_texture() -> Texture2D:
-	_body_canvas = SubViewport.new()
-	_body_canvas.size = Vector2i(80, 320)
-	_body_canvas.transparent_bg = true
-	_body_canvas.disable_3d = true
-	_body_canvas.render_target_update_mode = SubViewport.UPDATE_ONCE
-	_body_portrait = CharacterPortrait.new()
-	_body_portrait.full_body = true
-	_body_portrait.size = Vector2(80, 320)
-	_body_portrait.character = Saves.current_character()
-	_body_canvas.add_child(_body_portrait)
-	add_child(_body_canvas)
-	return _body_canvas.get_texture()
+## Your body, seen only in the mirror and on the cameras: built from your
+## character, walking when you walk, and doing what your arm does.
+func _make_body() -> void:
+	player.body_sprite.visible = false
+	body = People.place(player, People.player(character), player.global_position, 0.0)
+	body.set_layers(TrailerWorld.LAYER_BODY)
 
 
+## The pose and what is in your hand, copied onto the body when it changes.
 func _update_body_pose() -> void:
-	var held := ""
-	var sauces: Array = []
-	if stand.held != null:
-		held = stand.held.data["kind"]
-		for sauce: String in StandRules.SAUCES:
-			if stand.held.data.get(sauce, false):
-				sauces.append(sauce)
+	if body == null:
+		return
+	body.speed = Vector2(player.velocity.x, player.velocity.z).length()
 	var pose := player.arm.pose()
-	var look := "%s|%s|%s" % [pose, held, ",".join(sauces)]
+	var held := ""
+	if stand.held != null:
+		held = "%s|%s" % [stand.held.data["kind"], StandRules.sauces_on(stand.held.data)]
+	elif fighter != null and fighter.armed():
+		held = fighter.weapon
+	var look := "%s|%s" % [pose, held]
 	if look == _body_look:
 		return
 	_body_look = look
-	_body_portrait.pose = pose
-	_body_portrait.held = held
-	_body_portrait.held_sauces = sauces
-	_body_portrait.queue_redraw()
-	_body_canvas.render_target_update_mode = SubViewport.UPDATE_ONCE
+	match pose:
+		"swing":
+			body.act("swing", 0.45)
+		"shoot":
+			body.act("aim", 0.4)
+		"reach":
+			body.act("pay", 0.5)
+		_:
+			body.hold_pose = pose
+	if _body_prop != null:
+		_body_prop.queue_free()
+		_body_prop = null
+	var prop: Node3D = null
+	if stand.held != null:
+		var copy := FoodItem.create(stand.held.data["kind"])
+		copy.data = stand.held.data.duplicate()
+		copy.refresh(character.stat_value("cooking"))
+		copy.pick.collision_layer = 0
+		copy.remove_from_group("food")
+		prop = copy
+	elif fighter != null and fighter.weapon == "bat":
+		prop = People._rod(0.03, 0.75, Vector3(0.0, 0.0, -0.3), Vector3(-70.0, 0.0, 0.0), Color("#8a5a32"))
+	elif fighter != null and fighter.weapon == "slingshot":
+		prop = People._box(Vector3(0.06, 0.14, 0.02), Vector3(0.0, 0.05, -0.04), Color("#6b4426"))
+	if prop != null:
+		_body_prop = body.attach("Hand.R", prop)
+		body.set_layers(TrailerWorld.LAYER_BODY)
 
 
 func _restore() -> void:
@@ -204,7 +220,7 @@ func _process(delta: float) -> void:
 	hud.set_step("" if _busy else stand.hint())
 	player.arm.holding = stand.held != null
 	_update_body_pose()
-	hud.bubbles = [] if _busy else stand.bubbles(player.camera, float(PIXEL_SCALE))
+	hud.bubbles = [] if _busy else stand.bubbles(player.camera, float(Settings.pixel_scale))
 	if touch.hand_ready != stand.can_eat_held():
 		touch.hand_ready = stand.can_eat_held()
 		touch.queue_redraw()
@@ -683,8 +699,8 @@ func _burglar() -> void:
 	player.global_position = Vector3(8.3, 0.05, 1.7)
 	player.rotation.y = PI
 	player.set_pitch(deg_to_rad(6.0))
-	var thief: Node3D = world.church._person("#1a1b20", false)
-	thief.position = Vector3(8.3, -0.15, 3.4)
+	var thief: PersonRig = People.place(world, People.role("burglar", _rng), Vector3(8.3, -0.15, 3.4), 0.0)
+	thief.hold_pose = "reach"
 	Sound.play("glass")
 	await get_tree().create_timer(0.4).timeout
 	var tween := create_tween()

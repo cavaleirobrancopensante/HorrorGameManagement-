@@ -653,6 +653,7 @@ func _give(customer: Customer) -> void:
 	_learn("serve")
 	if not customer.is_complete():
 		return
+	customer.pay()
 	var paid := StandRules.price(customer.order)
 	var tip := StandRules.tip(customer.mood, _charm())
 	game.save["survival"]["money"] = Survival.money(game.save) + paid + tip

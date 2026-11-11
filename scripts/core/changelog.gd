@@ -5,6 +5,17 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.10.0", "date": "11 Nov 2026", "title": "Real people",
+		"changes": [
+			"Every person is now a 3D model instead of a flat cut-out: customers, thugs, shooters, the burglar, Father Columba, the informant, the inspector, and you in the mirror and on the cameras.",
+			"The models are Quaternius's free CC0 Modular Men and Women. Each outfit has a head, a body, legs and feet that mix with any other, and skin, hair and clothes are recoloured, so every customer is different.",
+			"They move: walking, paying at the hatch, swinging a pipe, aiming, bashing at your door, flinching when hit, and falling. Your reflection walks with you, holds what you hold, and swings when you swing.",
+			"Clothes and things made to match: Father Columba's cassock, collar and rosary, an old woman's headscarf and shopping bag, hoods and face cloths, balaclavas, hats, aprons, pipes and pistols.",
+			"Sharper surfaces: every texture has four times the detail, with grime, and relief that catches the light.",
+			"A Picture setting: Sharp, Crisp (the new default) or Retro, for the size of the game's pixels.",
+		],
+	},
+	{
 		"version": "0.9.0", "date": "10 Nov 2026", "title": "Fight back",
 		"changes": [
 			"A bat and a slingshot. R (or the Arm button on phones, or the mouse wheel) cycles bat, slingshot, empty hands. With a weapon out, use swings or shoots.",
