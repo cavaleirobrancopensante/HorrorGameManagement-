@@ -5,6 +5,15 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.12.0", "date": "11 Nov 2026", "title": "Butcher's apron",
+		"changes": [
+			"A new apron: a butcher's bib with a neck strap, a skirt to the knee with a darker hem, and a waistband tied at the back.",
+			"It is laid over each body's own shape and kept inside the line of the arms, so no arm passes through it in any pose: walking, holding, paying, eating, swinging, aiming or hands up. Apron wearers hold their arms a touch wider.",
+			"The skirt swings forward with your leading leg as you walk, instead of the legs passing through it.",
+			"The wardrobe at home now opens: change your top, its colour, trousers, shoes and apron, see yourself in 3D, and put them on. The mirror and cameras show the change.",
+		],
+	},
+	{
 		"version": "0.11.0", "date": "11 Nov 2026", "title": "Easier start",
 		"changes": [
 			"Character creation rebuilt: four clear steps with a progress bar, a sentence saying what each step is for, and big Back, Randomize this step and Next buttons.",

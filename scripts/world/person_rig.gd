@@ -21,6 +21,12 @@ var skeleton: Skeleton3D
 ## Walking speed now, in metres per second. Set by the owner each frame.
 var speed := 0.0
 var hold_pose := "rest"
+## How far the arms hang out from the body, in degrees. Aprons widen it a
+## little so the hands pass beside the cloth, not through it.
+var arm_out := 4.0
+## An apron's skirt, if worn: it swings forward on a hinge at the waist with
+## whichever thigh is in front, so the legs push it instead of passing through.
+var apron_swing: Node3D
 var _action := ""
 var _action_time := 0.0
 var _action_length := 0.0
@@ -151,6 +157,8 @@ func _apply(stride: float) -> void:
 	_turn("UpperLeg.R", "leg_fwd.R", -swing)
 	_turn("LowerLeg.L", "knee.L", maxf(0.0, -sin(_phase)) * 40.0 * stride)
 	_turn("LowerLeg.R", "knee.R", maxf(0.0, sin(_phase)) * 40.0 * stride)
+	if apron_swing != null:
+		apron_swing.rotation.x = deg_to_rad(absf(swing) * 1.1)
 	# Breathing, and the bob of the walk.
 	_turn("Chest", "lean", sin(_breath * 1.7) * 1.2)
 	position.y = absf(sin(_phase)) * 0.03 * stride
@@ -181,7 +189,7 @@ func _apply(stride: float) -> void:
 
 ## Forward swing, outward lift and elbow bend for each arm, in degrees.
 func _arm_pose(pose: String, t := 0.0) -> Dictionary:
-	var arms := {"fwd.L": 0.0, "out.L": 4.0, "elbow.L": 8.0, "fwd.R": 0.0, "out.R": 4.0, "elbow.R": 8.0}
+	var arms := {"fwd.L": 0.0, "out.L": arm_out, "elbow.L": 8.0, "fwd.R": 0.0, "out.R": arm_out, "elbow.R": 8.0}
 	match pose:
 		"hold":
 			arms["fwd.R"] = 35.0
@@ -193,7 +201,7 @@ func _arm_pose(pose: String, t := 0.0) -> Dictionary:
 			arms["fwd.R"] = 55.0
 			arms["elbow.R"] = 120.0
 		"bag":
-			arms["out.R"] = 8.0
+			arms["out.R"] = arm_out + 4.0
 		"bat", "pipe":
 			arms["fwd.R"] = 25.0
 			arms["elbow.R"] = 55.0
