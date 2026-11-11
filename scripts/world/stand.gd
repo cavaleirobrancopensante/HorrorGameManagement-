@@ -71,6 +71,11 @@ func _bottle_size() -> int:
 	return StandRules.bottle_size(Survival.has_upgrade(game.save, "bottles"))
 
 
+## The sign in the window says OPEN: new customers come.
+func is_open() -> bool:
+	return bool(_save_world().get("sign_open", true))
+
+
 func _hatch_open() -> bool:
 	return bool(_save_world()["hatch_open"])
 
@@ -148,10 +153,11 @@ func tick(delta: float) -> void:
 			if customer.mood <= 0.0:
 				_send_away(i)
 				Survival.change_need(game.save, "stress", 3.0)
+				GameLog.bad("A customer gave up waiting and left angry.")
 				message.emit("A customer gave up waiting and left angry.")
 				continue
 
-	if not _hatch_open() or spots.find(null) == -1:
+	if not _hatch_open() or not is_open() or spots.find(null) == -1:
 		return
 	_spawn_wait -= delta
 	if _spawn_wait <= 0.0:
@@ -171,6 +177,7 @@ func spawn(instant := false) -> void:
 	if free == -1:
 		return
 	var tv := Survival.has_upgrade(game.save, "tv")
+	GameLog.mark("a customer arrives")
 	var customer := Customer.create(_rng, StandRules.random_order(_rng), StandRules.start_mood(_charm()), StandRules.mood_decay(_charm(), tv))
 	game.world.add_child(customer)
 	spots[free] = customer
@@ -258,6 +265,7 @@ func _put_down(point: Vector3, surface: Surface) -> void:
 			pass
 		elif on_floor:
 			item.data["dirty"] = true
+			GameLog.bad("Dropped food on the floor.")
 			message.emit("On the floor. Nobody will eat that now.")
 		else:
 			item.data["odd"] = true
@@ -624,6 +632,7 @@ func _save_bottle(bottle: FoodItem) -> void:
 func _tell_out_of(customer: Customer) -> void:
 	var changed := StandRules.substitute(customer.order, availability())
 	if changed.is_empty():
+		GameLog.bad("A customer left: nothing they wanted was in stock.")
 		message.emit("\"Nothing I want? Unbelievable.\" They walk off.")
 		Survival.change_need(game.save, "stress", 2.0)
 		_send_away(spots.find(customer))
@@ -640,10 +649,12 @@ func _give(customer: Customer) -> void:
 	if not problem.is_empty():
 		customer.upset(StandRules.MOOD_REFUSED if held.data["dirty"] else StandRules.MOOD_WRONG)
 		Survival.change_need(game.save, "stress", 1.5)
+		GameLog.bad("Order refused: %s" % problem)
 		message.emit("\"%s\"" % problem)
 		return
 	if held.data["odd"]:
 		customer.upset(StandRules.MOOD_ODD_PLACE)
+		GameLog.bad("Order refused: the food was put on a dirty or odd spot.")
 		message.emit("\"Where has this been sitting?\"")
 	if held.data["kind"] == "can":
 		customer.has_can = true
@@ -660,5 +671,6 @@ func _give(customer: Customer) -> void:
 	Sound.play("till")
 	var face := StandRules.face(customer.mood)
 	var mood_text: String = {"happy": "They look pleased.", "neutral": "They take it without a word.", "angry": "They snatch it and go."}[face]
+	GameLog.good("Served a customer: +%d credits%s. %s" % [paid + tip, " (tip %d)" % tip if tip > 0 else "", mood_text])
 	message.emit("+%d credits%s. %s" % [paid + tip, " (tip %d)" % tip if tip > 0 else "", mood_text])
 	_send_away(spots.find(customer))

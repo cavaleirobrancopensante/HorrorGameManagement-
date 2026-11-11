@@ -98,6 +98,7 @@ func current_character() -> PlayerCharacter:
 func save_current() -> bool:
 	if current_slot < 0 or current.is_empty():
 		return false
+	GameLog.mark("saving")
 	current["updated"] = Time.get_unix_time_from_system()
 	return _write(current_slot, current)
 

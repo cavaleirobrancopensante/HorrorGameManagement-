@@ -42,6 +42,7 @@ static func _part(mesh_name: String) -> String:
 
 
 static func build(recipe: Dictionary) -> PersonRig:
+	GameLog.mark("building a person")
 	var sex: String = recipe.get("sex", "man")
 	var rig := PersonRig.new()
 	var base: Node3D = _scene(sex, recipe.get("body", "Casual")).instantiate()
@@ -511,6 +512,7 @@ static func _band(points: PackedVector3Array, y: float, height: float, centre: V
 ## little wider, so no arm passes through it in any pose. The skirt hangs from
 ## the hips and the bib from the torso, so both move with the body.
 static func _apron(rig: PersonRig, recipe: Dictionary) -> void:
+	GameLog.mark("fitting an apron")
 	var cloth := Color(recipe.get("apron_colour", "#d8d0bc"))
 	var hem_colour := cloth.darkened(0.12)
 	var band_colour := cloth.darkened(0.08)

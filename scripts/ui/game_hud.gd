@@ -69,6 +69,7 @@ func set_holding(text: String, can_eat: bool) -> void:
 
 
 func toast(text: String) -> void:
+	GameLog.add("info", text)
 	_toast = text
 	_toast_time = TOAST_SECONDS
 

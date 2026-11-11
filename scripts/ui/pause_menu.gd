@@ -28,6 +28,7 @@ static func open(parent: Node, on_resume: Callable, on_quit: Callable) -> PauseM
 	var resume := UiKit.button("Resume", menu.go_back)
 	column.add_child(resume)
 	column.add_child(UiKit.button("Settings", func() -> void: SettingsPanel.open(menu)))
+	column.add_child(UiKit.tip(UiKit.button("Test log", func() -> void: LogPanel.open(menu)), "What happened this session, good and bad, and any lag or errors. F3 opens it too."))
 	column.add_child(UiKit.button("Save and return to menu", on_quit))
 	resume.grab_focus()
 	return menu

@@ -5,10 +5,14 @@ config_version=5
 
 config/name="Daily Bread"
 config/description="A Catholic horror food-stand game."
-config/version="0.13.0"
+config/version="0.14.0"
 run/main_scene="res://scenes/main_menu.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[audio]
+
+driver/output_latency.web=100
 
 [autoload]
 
@@ -16,6 +20,7 @@ Settings="*res://scripts/autoload/settings.gd"
 Sound="*res://scripts/autoload/sound.gd"
 Saves="*res://scripts/autoload/saves.gd"
 Router="*res://scripts/autoload/router.gd"
+GameLog="*res://scripts/autoload/game_log.gd"
 
 [display]
 
@@ -29,4 +34,5 @@ window/handheld/orientation=4
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+limits/opengl/max_lights_per_object=12
 textures/vram_compression/import_etc2_astc=true

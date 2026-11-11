@@ -10,6 +10,7 @@ const WORLD := {
 	"take_bun": ["Bread bin", "Bread rolls for hot dogs and burgers. Put one down, then add cooked meat."],
 	"cooler": ["Drinks cooler", "Cans of soda. Some customers want one with their food. You can drink one yourself."],
 	"bin": ["Bin", "Throw away anything burnt, dirty or unwanted."],
+	"sign": ["Open / Closed sign", "Turn it to CLOSED and no new customers come, while anyone already waiting can still be served. Turn it to OPEN to trade again."],
 	"hatch": ["Hatch lever", "Opens and shuts the serving hatch. Customers only come while it is open. Shut, nobody outside can see or shoot in."],
 	"computer": ["Computer", "Civic Link: your security cameras, the shop for stock and upgrades, the news, and your standing with the state."],
 	"bed": ["Bed", "Sleep through the night to shake off tiredness. Close the window shutter first."],

@@ -34,6 +34,8 @@ func _ready() -> void:
 
 
 func goto(screen: String) -> void:
+	GameLog.loading(screen)
+	GameLog.add("info", "Opened: %s." % screen.capitalize())
 	get_tree().change_scene_to_file(SCENES[screen])
 
 

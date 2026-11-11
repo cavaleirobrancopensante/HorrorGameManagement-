@@ -5,6 +5,18 @@ extends RefCounted
 
 const PATCHES := [
 	{
+		"version": "0.14.0", "date": "11 Nov 2026", "title": "Test log and the sign",
+		"changes": [
+			"A test log: press F3, or Test log in the pause menu or Settings. It lists what happened, green for good (served, resisted, confessed), red for bad (customers lost, hurt, gave in), amber for lag, blue for lighting changes and purple for errors in the game itself, with filters and a live frame rate.",
+			"Copy log (or Download log on the web) gives you the whole session as text to send. The last five sessions are also kept as files.",
+			"Show frame rate puts the frame rate, the slowest recent frame and the draw calls in the corner while you play.",
+			"Less lag: the first customer, the first look in the mirror and the first visit to church used to freeze the game for a moment while the graphics were prepared. That now happens while the screen fades in at the start.",
+			"Less music stutter on the web: the sound keeps a bigger buffer, so a slow frame no longer breaks it up.",
+			"Lighting: the flicker no longer switches the lights back on in a power cut, and each surface can now take more lights at once, so lights stop popping in and out as you move.",
+			"An OPEN / CLOSED sign hangs in the hatch window. Turn it to CLOSED and no new customers come, while anyone already waiting can still be served.",
+		],
+	},
+	{
 		"version": "0.13.0", "date": "11 Nov 2026", "title": "The high altar",
 		"changes": [
 			"St. Brigid's has a traditional high altar against the east wall: three steps up to the footpace, a stone altar with a green frontal and white cloths, gradines with six tall candles, the veiled tabernacle in the middle, altar cards and the missal, and a carved reredos with gilt arches, two statues and the crucifix above.",
