@@ -346,7 +346,13 @@ func apply_upgrades(owned: Dictionary) -> void:
 
 
 ## Inside St. Brigid's the air is clear; outside the city haze closes in.
+var _logged_church := false
+
+
 func set_in_church(inside: bool) -> void:
+	if inside != _logged_church:
+		_logged_church = inside
+		GameLog.light("Entered the church: its own lights and haze." if inside else "Left the church.")
 	_environment.fog_density = 0.008 if inside else 0.03
 
 
@@ -360,6 +366,8 @@ func set_daylight(amount: float) -> void:
 	_environment.ambient_light_energy = 0.04 if _blacked_out else lerpf(0.55, 1.0, amount)
 	_environment.fog_light_color = NIGHT_FOG.lerp(DAY_FOG, amount)
 	var lamps_on := amount < 0.6
+	if lamps_on != _street_light.visible:
+		GameLog.light("Street lamps %s (daylight %d%%)." % ["on" if lamps_on else "off", roundi(amount * 100.0)])
 	_street_light.visible = lamps_on
 	_street_glow.visible = lamps_on
 
@@ -463,6 +471,7 @@ func _build_kitchen() -> void:
 	_span(Vector3(3.15, 1.25, WIDTH - 0.04), Vector3(3.3, 1.6, WIDTH - 0.01), _c("#2b2b30"), false)
 	_box(Vector3(0.03, 0.18, 0.03), Vector3(3.22, 1.5, WIDTH - 0.07), _c("#a3302c"), false, Vector3(25.0, 0.0, 0.0))
 	_zone(Vector3(3.1, 1.2, WIDTH - 0.15), Vector3(3.35, 1.65, WIDTH), "hatch")
+	_build_sign()
 	# Kitchen bin, by the grill where you need it, and labelled.
 	_cyl(0.2, 0.7, Vector3(3.1, 0.35, 2.3), _c("#2f6b45"))
 	_cyl(0.21, 0.04, Vector3(3.1, 0.72, 2.3), _c("#1f4a30"))
@@ -955,6 +964,38 @@ func _blocker(a: Vector3, b: Vector3) -> StaticBody3D:
 	return body
 
 
+## The OPEN / CLOSED sign hanging in the hatch window, readable from the
+## street and from the kitchen. Turned to CLOSED, no new customers come.
+var _sign_faces: Array[Label3D] = []
+var _sign_board: MeshInstance3D
+
+
+func _build_sign() -> void:
+	_span(Vector3(2.6, 1.9, WIDTH - 0.03), Vector3(2.61, 1.96, WIDTH - 0.02), _c("#8a8a90"), false)
+	_span(Vector3(2.94, 1.9, WIDTH - 0.03), Vector3(2.95, 1.96, WIDTH - 0.02), _c("#8a8a90"), false)
+	_sign_board = _span(Vector3(2.5, 1.66, WIDTH - 0.035), Vector3(3.05, 1.9, WIDTH - 0.015), _c("#1c1a1e"), false) as MeshInstance3D
+	for outside in [true, false]:
+		var face := Label3D.new()
+		face.font = UiKit.title_font()
+		face.font_size = 64
+		face.pixel_size = 0.0028
+		face.outline_size = 10
+		face.position = Vector3(2.775, 1.78, WIDTH - 0.01 if outside else WIDTH - 0.04)
+		face.rotation_degrees.y = 0.0 if outside else 180.0
+		face.double_sided = false
+		add_child(face)
+		_sign_faces.append(face)
+	_zone(Vector3(2.5, 1.62, WIDTH - 0.12), Vector3(3.05, 1.94, WIDTH), "sign")
+	set_sign_open(true)
+
+
+func set_sign_open(open: bool) -> void:
+	for face in _sign_faces:
+		face.text = "OPEN" if open else "CLOSED"
+		face.modulate = Color("#7dff9a") if open else Color("#ff5a5a")
+		face.outline_modulate = Color(face.modulate, 0.3)
+
+
 func set_hatch_open(open: bool, animate: bool) -> void:
 	if _hatch_body == null:
 		_hatch_body = _blocker(Vector3(0.5, 1.0, WIDTH + 0.02), Vector3(3.0, 1.9, WIDTH + 0.08))
@@ -990,11 +1031,15 @@ func show_crates(count: int) -> void:
 
 ## The power dips: every light inside stutters and goes out for a moment.
 func flicker() -> void:
-	if _flicker and _flicker.is_running():
+	# No flicker in a power cut: it used to end by switching the lights back on.
+	if (_flicker and _flicker.is_running()) or _blacked_out:
 		return
+	GameLog.light("The trailer lights flicker for a second (on purpose).")
 	_flicker = create_tween()
 	for step: Array in [[0.25, 0.07], [1.0, 0.05], [0.0, 0.1], [0.7, 0.06], [0.0, 0.6], [1.0, 0.0]]:
-		_flicker.tween_callback(_set_power.bind(step[0]))
+		_flicker.tween_callback(func() -> void:
+			if not _blacked_out:
+				_set_power(step[0]))
 		_flicker.tween_interval(step[1])
 	Sound.play("buzz", 0.1, -8.0)
 
@@ -1002,6 +1047,7 @@ func flicker() -> void:
 ## The power dies completely, or comes back.
 func blackout(on: bool) -> void:
 	_blacked_out = on
+	GameLog.light("Power cut: the lights go out." if on else "The power comes back.")
 	_set_power(0.0 if on else 1.0)
 	if on:
 		_environment.ambient_light_energy = 0.04

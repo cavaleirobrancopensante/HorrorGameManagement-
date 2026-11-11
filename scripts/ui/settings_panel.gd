@@ -38,6 +38,7 @@ func _build() -> void:
 	for row: Array in ROWS:
 		column.add_child(_make_row(row[0], row[1]))
 	column.add_child(_picture_row())
+	column.add_child(UiKit.tip(UiKit.button("Test log", func() -> void: LogPanel.open(self)), "What happened this session, good and bad, and any lag or errors. F3 opens it too."))
 	column.add_child(UiKit.button("Back", go_back))
 
 

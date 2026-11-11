@@ -60,8 +60,59 @@ func _ready() -> void:
 	Sound.music_finished.connect(_on_music_finished)
 	_build()
 	_restore()
+	_warm_up()
 	if not _touch_mode:
 		hud.show_hint("Click to look around. WASD to move, E or click to use, Q or right click to eat what you hold, F torch, C plan the day, Esc pause.")
+
+
+## The first time anything is drawn, the graphics card has to prepare it, and
+## that froze the game for a moment: the first customer, the first look in
+## the mirror, the first visit to church. While the screen fades in, a hidden
+## camera looks once at every place and at a man and a woman, so it is all
+## ready before you play.
+func _warm_up() -> void:
+	GameLog.loading("warming up")
+	GameLog._loaded_frames = 30
+	hud.fade.color.a = 1.0
+	var eye := SubViewport.new()
+	eye.size = Vector2i(160, 90)
+	eye.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	world.get_parent().add_child(eye)
+	var camera := Camera3D.new()
+	camera.cull_mask = 0xFFFFF
+	eye.add_child(camera)
+	var rng := RandomNumberGenerator.new()
+	var models: Array[PersonRig] = []
+	for sex in ["man", "woman"]:
+		var recipe := People.stranger(rng)
+		recipe["sex"] = sex
+		recipe["head"] = "Casual"
+		recipe["body"] = "Casual"
+		recipe["legs"] = "Casual"
+		recipe["feet"] = "Casual"
+		models.append(People.place(world, recipe, Vector3(-3.0 + models.size() * 0.8, TrailerWorld.GROUND, 7.0), 0.0))
+	var looks := [
+		[Vector3(-1.4, 1.5, 5.0), Vector3(-2.6, 1.0, 7.0)],
+		[Vector3(1.8, 1.6, 1.2), Vector3(1.8, 1.0, 3.0)],
+		[Vector3(5.0, 1.6, 1.0), Vector3(8.0, 1.0, 2.5)],
+		[Vector3(9.0, 1.6, 1.0), Vector3(10.6, 1.2, 1.3)],
+		[Vector3(3.0, 1.7, 9.0), Vector3(3.0, 1.2, 2.0)],
+		[Church.ORIGIN + Vector3(10.0, 1.6, 0.0), Church.ORIGIN + Vector3(23.0, 2.0, 0.0)],
+		[Church.ORIGIN + Vector3(14.0, 1.6, -2.0), Church.ORIGIN + Vector3(8.0, 1.0, -3.9)],
+	]
+	for look: Array in looks:
+		camera.look_at_from_position(look[0], look[1])
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	world.church.set_mass("elevation")
+	camera.look_at_from_position(Church.ORIGIN + Vector3(19.0, 1.6, 0.0), Church.ORIGIN + Vector3(23.0, 2.2, 0.0))
+	await get_tree().process_frame
+	world.church.set_mass("")
+	for model in models:
+		model.queue_free()
+	eye.queue_free()
+	var tween := create_tween()
+	tween.tween_property(hud.fade, "color:a", 0.0, 0.6)
 
 
 func _build() -> void:
@@ -178,6 +229,7 @@ func _restore() -> void:
 		player.rotation.y = TrailerWorld.SPAWN_YAW
 	_set_in_church(Church.contains(player.position))
 	world.set_hatch_open(bool(state["hatch_open"]), false)
+	world.set_sign_open(bool(state.get("sign_open", true)))
 	world.apply_upgrades(state["upgrades"])
 	world.set_shutters(bool(state["shutters_closed"]), false)
 	_arrived = Survival.arrived(save).size()
@@ -199,7 +251,9 @@ func _process(delta: float) -> void:
 		_check_arrivals()
 		_update_day()
 		_update_shift()
+		GameLog.clock = "%s %s" % [Survival.date_text(Survival.now(save)), Survival.clock_text(Survival.now(save))]
 		for notice: String in Survival.take_notices(save):
+			GameLog.bad(notice)
 			hud.toast(notice)
 		_autosave += delta
 		if _autosave >= AUTOSAVE_SECONDS:
@@ -349,6 +403,14 @@ func _set_busy(on: bool) -> void:
 		_recapture = false
 
 
+## F3: pause and show the test log.
+func open_log() -> void:
+	if not _busy:
+		go_back()
+	var menus := get_tree().get_nodes_in_group("modal")
+	LogPanel.open(menus[-1] if not menus.is_empty() else self)
+
+
 ## Escape and the phone's back button: pause, or leave once dead.
 func go_back() -> void:
 	if _dead:
@@ -436,6 +498,8 @@ func _prompt_for(target: Interactable) -> String:
 			return "Check the stock"
 		"hatch":
 			return "Close the hatch" if bool(save["world"]["hatch_open"]) else "Open the hatch"
+		"sign":
+			return "Turn the sign to CLOSED" if bool(save["world"].get("sign_open", true)) else "Turn the sign to OPEN"
 		"delivery":
 			return "Carry the delivery inside"
 		"calendar":
@@ -523,6 +587,13 @@ func _interact() -> void:
 				hud.toast("No coffee left. Order more on the computer.")
 		"shelves":
 			_show_stock()
+		"sign":
+			var open_sign := not bool(save["world"].get("sign_open", true))
+			save["world"]["sign_open"] = open_sign
+			world.set_sign_open(open_sign)
+			Sound.play("click", 0.1)
+			GameLog.add("info", "Turned the sign to %s." % ("OPEN" if open_sign else "CLOSED"))
+			hud.toast("Open for business." if open_sign else "Closed. Nobody new will come; anyone already waiting can still be served.")
 		"hatch":
 			var open := not bool(save["world"]["hatch_open"])
 			save["world"]["hatch_open"] = open
@@ -821,6 +892,7 @@ func spend_shift(id: String) -> void:
 	tween.tween_property(hud.fade, "color:a", 0.0, 0.9)
 	await tween.finished
 	for notice: String in Survival.take_notices(save):
+		GameLog.bad(notice)
 		hud.toast(notice)
 	if id == "mass":
 		_elevation()
@@ -974,7 +1046,9 @@ func _cycle_weapon() -> void:
 func hurt(amount: float, cause: String) -> void:
 	if _dead:
 		return
-	Survival.change_health(save, -Combat.taken(amount, character))
+	var lost := Combat.taken(amount, character)
+	Survival.change_health(save, -lost)
+	GameLog.bad("Hurt by %s: -%d health (%d left)." % [cause, roundi(lost), roundi(Survival.health(save))])
 	Survival.change_need(save, "stress", amount * 0.5)
 	hud.flash(Color(0.6, 0.0, 0.0, 0.45))
 	horror._shake(0.25, 0.06)
@@ -1064,6 +1138,7 @@ func _confession() -> void:
 
 func _confess(full: bool) -> void:
 	var text := Soul.confess(save, full)
+	GameLog.good("Went to confession.")
 	var cause := Survival.advance(save, 20.0)
 	if not cause.is_empty():
 		_die(cause)
@@ -1099,6 +1174,7 @@ func _offer_communion() -> void:
 
 func _communion(receive: bool) -> void:
 	var text := Soul.receive_communion(save) if receive else Soul.spiritual_communion(save)
+	GameLog.good("Received Communion." if receive else "Made a spiritual communion.")
 	_save_now()
 	world.church.set_mass("altar")
 	NoticeOverlay.show_notice(self, "Communion", text, func() -> void:
@@ -1133,6 +1209,7 @@ func _tempt(entry: Dictionary) -> void:
 
 func _give_in(entry: Dictionary) -> void:
 	var result := Temptation.give_in(save, entry)
+	GameLog.bad("Gave in to temptation: %s%s." % [entry.get("sin", "sin"), ", a grave sin" if entry["grave"] else ""])
 	if not str(result["cause"]).is_empty():
 		_die(result["cause"])
 		return
@@ -1143,6 +1220,7 @@ func _give_in(entry: Dictionary) -> void:
 
 
 func _resist(entry: Dictionary) -> void:
+	GameLog.good("Resisted temptation: %s." % entry.get("sin", "sin"))
 	hud.toast(Temptation.resist(save, entry, character))
 	_set_busy(false)
 
@@ -1151,6 +1229,7 @@ func _resist(entry: Dictionary) -> void:
 
 func _die(cause: String) -> void:
 	_dead = true
+	GameLog.bad("Died: %s." % cause)
 	_set_busy(true)
 	Saves.kill_current(cause)
 	Sound.stop_ambience()
