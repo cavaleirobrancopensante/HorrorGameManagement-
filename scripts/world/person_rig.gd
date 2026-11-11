@@ -226,6 +226,14 @@ func _arm_pose(pose: String, t := 0.0) -> Dictionary:
 		"hands_up":
 			arms["fwd.R"] = 160.0
 			arms["fwd.L"] = 160.0
+		"elevate":
+			# The Elevation: both hands high over the head, holding up the Host.
+			arms["fwd.R"] = 178.0
+			arms["fwd.L"] = 178.0
+			arms["out.R"] = -8.0
+			arms["out.L"] = -8.0
+			arms["elbow.R"] = 6.0
+			arms["elbow.L"] = 6.0
 		"hurt":
 			arms["fwd.R"] = 30.0
 			arms["fwd.L"] = 30.0
