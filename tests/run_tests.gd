@@ -11,7 +11,7 @@ func _initialize() -> void:
 	saves.base_dir = "user://test_saves"
 	_clean()
 	_test_random_characters()
-	_test_sin_budget()
+	_test_struggles()
 	_test_stats()
 	_test_save_round_trip()
 	_test_ten_independent_slots()
@@ -30,7 +30,10 @@ func _initialize() -> void:
 	_test_two_fingers()
 	_test_confession()
 	_test_communion()
-	_test_temptation()
+	_test_moments()
+	_test_virtue_habits()
+	_test_parish()
+	_test_life()
 	_test_changelog()
 	_test_horror()
 	_test_scripts_compile()
@@ -67,7 +70,8 @@ func _test_random_characters() -> void:
 		character.randomize_all(_rng(i))
 		_check(character.validation_error() == "", "random character %d valid: %s" % [i, character.validation_error()])
 		_check(character.free_points_left() == 0, "random spends all points")
-		_check(character.strengths_left() >= 0, "random stays within virtue budget")
+		_check(character.struggles.size() >= 1 and character.struggles.size() <= GameData.MAX_STRUGGLES, "one or two struggles")
+		_check(not character.struggles.has(character.gift()), "the gift is never a struggle")
 		if character.appearance["sex"] == "woman":
 			_check(character.appearance["facial"] == "none", "no facial hair on women")
 		seen_temperaments[character.temperament] = true
@@ -76,32 +80,40 @@ func _test_random_characters() -> void:
 	_check(seen_skin.size() == 6, "all skin tones appear")
 
 
-func _test_sin_budget() -> void:
+func _test_struggles() -> void:
 	var character := PlayerCharacter.new()
 	character.full_name = "Test"
-	_check(not character.set_sin_level("pride", -1), "cannot start with free virtue")
+	character.temperament = "choleric"
 	_check(character.validation_error() != "", "no struggle is rejected")
-	_check(character.set_sin_level("gluttony", 2), "can struggle")
-	_check(character.set_sin_level("pride", -2), "struggle pays for virtue")
-	_check(not character.set_sin_level("gluttony", 1), "cannot withdraw a struggle a virtue depends on")
-	_check(character.sins["gluttony"] == 2, "refused change leaves value")
-	_check(character.validation_error() == "", "balanced character valid")
+	_check(not character.toggle_struggle("fortitude"), "the gift cannot be a struggle")
+	_check(character.toggle_struggle("patience"), "can mark a struggle")
+	_check(character.toggle_struggle("charity"), "can mark a second")
+	_check(not character.toggle_struggle("justice"), "not a third")
+	_check(character.validation_error() == "", "a character with struggles is valid")
+	_check(character.toggle_struggle("charity") and character.struggles == ["patience"], "a struggle can be unmarked")
+	var start := character.starting_virtues()
+	_check(start["patience"] == 0.0 and start["fortitude"] > start["justice"], "struggles start at nothing, the gift ahead")
+	# A struggle gives no bonus of any kind.
+	var plain := PlayerCharacter.new()
+	plain.temperament = "choleric"
+	for def: Dictionary in GameData.STATS:
+		_check(plain.stat_value(def["id"]) == character.stat_value(def["id"]), "struggles change no stat: %s" % def["id"])
+	# Old saves with sins become struggles.
+	var old := PlayerCharacter.from_dict({"full_name": "Old", "temperament": "sanguine", "sins": {"anger": 2, "greed": 1, "pride": -1}})
+	_check(old.struggles == ["patience", "justice"] or old.struggles == ["justice", "patience"], "old sins become struggles: %s" % str(old.struggles))
 
 
 func _test_stats() -> void:
 	var character := PlayerCharacter.new()
 	character.temperament = "melancholic"
-	character.set_sin_level("gluttony", 2)
 	character.change_free_point("cooking", 2)
-	_check(character.stat_value("cooking") == 5 + 3 + 6 + 2, "cooking stacks base, temperament, sin, points")
-	_check(is_equal_approx(character.temptation_strength("gluttony"), 1.6), "besetting sin tempts 160%")
-	_check(is_equal_approx(character.temptation_strength("envy"), 1.15), "inclined sin tempts 115%")
-	_check(character.predominant_fault() == "gluttony", "predominant fault")
+	_check(character.stat_value("cooking") == 5 + 3 + 2, "cooking stacks base, temperament, points")
 	for i in 3:
 		character.change_free_point("nerve", 1)
 	_check(not character.change_free_point("nerve", 1), "per-stat limit")
 	character.change_free_point("charm", 1)
-	_check(not character.change_free_point("devotion", 1), "total point limit")
+	_check(not character.change_free_point("vigilance", 1), "total point limit")
+	_check(GameData.stat_def("devotion").is_empty(), "prayer is not a stat")
 
 
 func _test_save_round_trip() -> void:
@@ -115,14 +127,16 @@ func _test_save_round_trip() -> void:
 	_check(JSON.stringify(loaded.to_dict(), "", true) == JSON.stringify(character.to_dict(), "", true), "character round trip")
 	for def: Dictionary in GameData.STATS:
 		_check(loaded.stat_value(def["id"]) == character.stat_value(def["id"]), "stat round trip")
-	_check(typeof(loaded.sins["pride"]) == TYPE_INT, "sin levels return to ints")
+	_check(loaded.struggles == character.struggles, "struggles round trip")
 	_check(not FileAccess.file_exists(saves.slot_path(0) + ".tmp"), "no temp file left")
 	var survival: Dictionary = saves.current["survival"]
 	_check(int(survival["health"]) == character.max_health(), "starts at full health")
 	_check(int(survival["money"]) == character.starting_money(), "starting money from business")
 	for need: Dictionary in GameData.NEEDS:
 		_check(survival.has(need["id"]), "need stored: %s" % need["id"])
-	_check(int(saves.current["soul"]["horror_lean"]) == 0, "horror starts balanced")
+	_check(saves.current["virtues"] is Dictionary and saves.current["virtues"].size() == GameData.VIRTUES.size(), "virtues start in the save")
+	_check(Life.age(saves.current) == character.start_age(), "age from the look: %d" % Life.age(saves.current))
+	_check(not saves.current["soul"].has("state_of_grace"), "no state-of-grace meter")
 
 
 func _test_ten_independent_slots() -> void:
@@ -178,7 +192,7 @@ func _test_needs_and_time() -> void:
 	_check(Survival.stock(save, "meals") == 2, "starting stock")
 	var hunger := Survival.need(save, "hunger")
 	_check(Survival.advance(save, 60.0) == "", "an hour passes alive")
-	_check(is_equal_approx(Survival.need(save, "hunger"), hunger + 3.0), "hunger rises per hour")
+	_check(is_equal_approx(Survival.need(save, "hunger"), hunger + 3.0 * Virtue.need_rate(save)), "hunger rises per hour, a little slower with temperance")
 	_check(Survival.clock_text(Survival.now(save)) == "21:00", "clock moves")
 	Survival.advance(save, 3.0 * 60.0)
 	_check(int(save["day"]) == 2, "day rolls over at midnight")
@@ -231,12 +245,14 @@ func _test_sleep() -> void:
 
 
 func _test_news() -> void:
-	_check(Survival.headlines(3, 0).size() == 5, "five headlines")
-	_check(Survival.headlines(3, 0) == Survival.headlines(3, 0), "same day same news")
-	var faithful := Survival.headlines(4, -50)
-	_check(GameData.NEWS_PERSECUTION.has(faithful[0]), "faithful see persecution")
-	var sinful := Survival.headlines(4, 50)
-	_check(GameData.NEWS_DEMONIC.has(sinful[0]), "sinful see the strange")
+	_check(Survival.headlines(3, 0.0).size() == 5, "five headlines")
+	_check(Survival.headlines(3, 0.0) == Survival.headlines(3, 0.0), "same day same news")
+	var watched := Survival.headlines(4, 0.6)
+	var count := 0
+	for line in watched:
+		if GameData.NEWS_PERSECUTION.has(line):
+			count += 1
+	_check(count == 2, "the watched read more about the persecution")
 
 
 func _test_calendar() -> void:
@@ -276,17 +292,28 @@ func _test_mass() -> void:
 	var save := _new_save()
 	var character := PlayerCharacter.from_dict(save["character"])
 	_check(Survival.mass_sunday(Survival.now(save)) == 2, "Saturday evening is the vigil")
+	var attention := Horror.attention(save)
 	Survival.spend_shift(save, "mass", character, _rng(1))
 	_check(Survival.attended_mass(save, 2), "vigil counts for Sunday")
+	_check(Horror.attention(save) > attention, "Mass is seen by the state")
 	_check(Survival.activity_blocked(save, "mass") != "", "no Mass at night")
+	Survival.take_notices(save)
 	Survival.advance(save, 2.0 * Survival.DAY)
-	_check(bool(save["soul"]["state_of_grace"]), "kept the Sunday obligation")
-	# A second character skips Mass.
+	_check(Virtue.regrets(save).is_empty(), "kept Sunday: nothing to regret")
+	# A second character misses Mass: a regret, not a meter.
 	var lazy := _new_save()
 	Survival.advance(lazy, 2.0 * Survival.DAY)
-	_check(not bool(lazy["soul"]["state_of_grace"]), "missing Mass loses grace")
-	_check(Survival.take_notices(lazy).size() == 1, "missed Mass notice")
+	_check(Virtue.regrets(lazy).size() == 1, "missing Mass is a regret")
+	var notices := Survival.take_notices(lazy)
+	_check(notices.size() >= 1, "missed Mass notice")
 	_check(Survival.take_notices(lazy).is_empty(), "notices are taken once")
+	# No priest, no Mass: nothing to regret.
+	var held := _new_save()
+	held["parish"]["priest_back"] = Survival.now(held) + 30.0 * Survival.DAY
+	Survival.spend_shift(held, "mass", PlayerCharacter.from_dict(held["character"]), _rng(1))
+	_check(not Survival.attended_mass(held, 2), "no Mass without a priest")
+	Survival.advance(held, 2.0 * Survival.DAY)
+	_check(Virtue.regrets(held).is_empty(), "no regret when there was no Mass to go to")
 
 
 func _test_stand_rules() -> void:
@@ -474,107 +501,210 @@ func _test_damaged_file() -> void:
 
 func _test_confession() -> void:
 	var save := _new_save()
-	_check(Soul.in_grace(save), "new soul in grace")
-	_check(Soul.sins(save).is_empty(), "new soul has no sins on record")
-	Soul.record(save, "gluttony", "Gluttony: two hot dogs.", false, 1)
-	_check(Soul.in_grace(save), "a venial sin keeps grace")
-	Soul.record(save, "envy", "Envy: reported a rival.", true, 4)
-	_check(not Soul.in_grace(save), "a grave sin costs grace")
-	var lines := Soul.examination(save)
-	_check(lines.size() == 2 and lines[0].begins_with("Grave:"), "examination lists grave sins first")
-	# Holding back a grave sin: nothing is forgiven, and it adds sacrilege.
-	var lean := int(save["soul"]["horror_lean"])
-	Soul.confess(save, false)
-	_check(not Soul.in_grace(save), "bad confession does not restore grace")
-	_check(Soul.sins(save).size() == 3, "bad confession adds sacrilege to the record")
-	_check(int(save["soul"]["horror_lean"]) > lean, "bad confession pushes toward the demonic")
-	# A full confession clears everything.
-	Soul.confess(save, true)
-	_check(Soul.in_grace(save), "full confession restores grace")
-	_check(Soul.sins(save).is_empty(), "full confession clears the record")
-	_check(bool(save["soul"]["penance"]), "confession gives a penance")
-	_check(Soul.fortified(save, int(save["day"])), "fortified on the day of confession")
-	_check(Soul.do_penance(save), "prayer completes the penance")
-	_check(not Soul.do_penance(save), "penance only once")
-	# Missing Sunday Mass goes on the record. Day 1 is Saturday; skip to Monday.
-	Survival.advance(save, Survival.DAY * 2.0)
-	_check(not Soul.in_grace(save), "missing Mass costs grace")
-	_check(Soul.has_grave(save), "missed Mass is on the record")
-	# Hours: evenings every day, Saturday afternoon too.
+	_check(Soul.examination(save).is_empty(), "nothing carried at first")
+	Virtue.fail(save, "patience", "You shouted at the drunk.")
+	Virtue.fail(save, "charity", "You sent the boy away.")
+	_check(Soul.examination(save).size() == 2, "regrets are what you bring")
+	var stress := Survival.need(save, "stress")
+	var money := Survival.money(save)
+	var virtues: Dictionary = save["virtues"].duplicate()
+	var text := Soul.confess(save)
+	_check(Virtue.regrets(save).is_empty(), "confession lays every regret down")
+	_check(text.contains("absolves"), "absolution")
+	_check(Survival.need(save, "stress") == stress and Survival.money(save) == money, "no meters move: mercy, not a reset")
+	_check(save["virtues"] == virtues, "confession is not a virtue buff")
+	_check(not save["soul"].has("penance"), "no penance counter")
+	_check(not Soul.confess(save).is_empty(), "confession with nothing to tell is welcomed too")
+	# Hours: evenings every day, Saturday afternoon too; not without a priest.
 	var saturday_afternoon := float(Survival.FIRST_SHIFT_MINUTE + 2 * 240 + 30)
-	_check(Soul.confession_open(saturday_afternoon), "confession on Saturday afternoon")
-	_check(not Soul.confession_open(saturday_afternoon + Survival.DAY * 2.0), "no confession Monday afternoon")
-	_check(Soul.confession_open(saturday_afternoon + Survival.DAY * 2.0 + 240.0), "confession Monday evening")
-	_check(not Soul.church_open(saturday_afternoon + 600.0), "church locked at night")
+	_check(Soul.confession_open(save, saturday_afternoon), "confession on Saturday afternoon")
+	_check(not Soul.confession_open(save, saturday_afternoon + Survival.DAY * 2.0), "no confession Monday afternoon")
+	_check(Soul.confession_open(save, saturday_afternoon + Survival.DAY * 2.0 + 240.0), "confession Monday evening")
+	_check(not Soul.church_open(save, saturday_afternoon + 600.0), "church locked at night")
+	save["parish"]["priest_back"] = Survival.now(save) + 100.0 * Survival.DAY
+	_check(not Soul.confession_open(save, saturday_afternoon + Survival.DAY * 2.0 + 240.0), "no confession while the priest is held")
 
 
 func _test_communion() -> void:
 	var save := _new_save()
-	var stress := Survival.need(save, "stress")
-	Soul.receive_communion(save)
-	_check(Soul.fortified(save, int(save["day"])), "Communion fortifies for the day")
-	_check(Soul.sins(save).is_empty(), "Communion in grace adds no sin")
-	Soul.record(save, "lust", "Lust.", true, 4)
-	Soul.receive_communion(save)
-	_check(Soul.sins(save).size() == 2, "Communion in mortal sin is a sacrilege")
-	Soul.spiritual_communion(save)
-	_check(Soul.sins(save).size() == 2, "spiritual communion adds nothing")
-	_check(stress >= 0.0, "stress stays valid")
+	var before := JSON.stringify(save)
+	_check(not Soul.communion_text(true).is_empty() and not Soul.communion_text(false).is_empty(), "communion is a quiet scene")
+	_check(JSON.stringify(save) == before, "communion changes no numbers")
 
 
-func _test_temptation() -> void:
+func _test_moments() -> void:
 	var save := _new_save()
 	var character := PlayerCharacter.from_dict(save["character"])
-	_check(Temptation.LIST.size() >= 7, "a temptation for each sin")
-	var covered := {}
-	for entry: Dictionary in Temptation.LIST:
-		covered[entry["sin"]] = true
-		_check(not GameData.sin_def(entry["sin"]).is_empty(), "temptation %s has a real sin" % entry["id"])
-	_check(covered.size() == GameData.SINS.size(), "every capital sin tempts")
-	# Temptations are personal, never an attack on the faith.
-	for entry: Dictionary in Temptation.LIST:
-		var words := (str(entry["text"]) + " " + str(entry["give"]) + " " + str(entry["give_text"])).to_lower()
-		for banned: String in Temptation.FAITH_WORDS:
-			_check(not (" " + banned) in (" " + words.replace(".", " ").replace(",", " ")), "temptation %s keeps the faith out of it: %s" % [entry["id"], banned])
-	# Stress makes temptation likelier.
+	_check(Moments.LIST.size() >= 10, "plenty of moments")
+	var virtues_seen := {}
+	for entry: Dictionary in Moments.LIST:
+		var options: Array = entry["options"]
+		_check(options.size() >= 2, "moment %s is a real choice" % entry["id"])
+		var has_failure := false
+		var best_good_money := -1000
+		for option: Dictionary in options:
+			_check(not GameData.virtue_def(option["virtue"]).is_empty(), "moment %s names a real virtue" % entry["id"])
+			virtues_seen[option["virtue"]] = true
+			var effects: Dictionary = option.get("effects", {})
+			if option["kind"] == "good":
+				best_good_money = maxi(best_good_money, int(effects.get("money", 0)))
+		for option: Dictionary in options:
+			if option["kind"] != "failure":
+				continue
+			has_failure = true
+			var effects: Dictionary = option.get("effects", {})
+			_check(not str(option.get("regret", "")).is_empty(), "failure %s leaves a regret" % entry["id"])
+			_check(int(effects.get("money", 0)) <= 0 and int(effects.get("money", 0)) <= best_good_money, "failure %s never pays" % entry["id"])
+			for id: String in effects.get("stock", {}):
+				_check(int(effects["stock"][id]) <= 0, "failure %s gains no stock" % entry["id"])
+			for id: String in effects.get("needs", {}):
+				_check(float(effects["needs"][id]) >= 0.0, "failure %s eases no need" % entry["id"])
+			_check(float(effects.get("trust", 0.0)) <= 0.0 and float(effects.get("parish", 0.0)) <= 0.0, "failure %s wins no trust" % entry["id"])
+		# Any moment with a failure is personal, never about the faith.
+		if has_failure:
+			var words := str(entry["text"]).to_lower()
+			for option: Dictionary in options:
+				words += " " + str(option["label"]).to_lower() + " " + str(option["text"]).to_lower()
+			for banned: String in Moments.FAITH_WORDS:
+				_check(not (" " + banned) in (" " + words.replace(".", " ").replace(",", " ").replace("\"", " ")), "moment %s keeps the faith out of the failure: %s" % [entry["id"], banned])
+	_check(virtues_seen.size() == GameData.VIRTUES.size(), "every virtue is tested somewhere")
+	# Stress brings moments more often; hatch moments need the hatch.
 	Survival.change_need(save, "stress", -100.0)
-	var calm := Temptation.chance_per_hour(save)
+	var calm := Moments.chance_per_hour(save)
 	Survival.change_need(save, "stress", 100.0)
-	_check(Temptation.chance_per_hour(save) > calm * 3.0, "stress multiplies temptation")
-	# Hatch-only temptations wait for the hatch.
+	_check(Moments.chance_per_hour(save) > calm * 2.0, "stress brings moments")
 	save["world"]["hatch_open"] = false
-	_check(not Temptation.available(save, Temptation.def("change")), "no customer temptation with the hatch shut")
+	_check(not Moments.available(save, Moments.def("drunk")), "no hatch moment with the hatch shut")
 	save["world"]["hatch_open"] = true
-	_check(Temptation.available(save, Temptation.def("change")), "customer temptation with the hatch open")
-	# One per shift at most.
+	_check(Moments.available(save, Moments.def("drunk")), "hatch moment with the hatch open")
 	var rng := _rng(3)
 	var first := {}
 	for i in 200:
-		first = Temptation.roll(save, character, rng, 1.0)
+		first = Moments.roll(save, rng, 1.0)
 		if not first.is_empty():
 			break
-	_check(not first.is_empty(), "temptation comes when stressed")
-	_check(Temptation.roll(save, character, rng, 50.0).is_empty(), "only one temptation per shift")
-	# Giving in pays and stains; resisting costs stress.
-	var money := Survival.money(save)
-	var result := Temptation.give_in(save, Temptation.def("report"))
-	_check(Survival.money(save) == money + 15, "giving in pays")
-	_check(not Soul.in_grace(save), "grave temptation costs grace")
-	_check(str(result["cause"]).is_empty(), "giving in does not kill")
-	Survival.change_need(save, "stress", -100.0)
-	Temptation.resist(save, Temptation.def("change"), character)
-	var cost := Survival.need(save, "stress")
-	_check(cost > 0.0, "resisting costs stress")
-	# Struggling with a sin makes resisting it harder; Communion halves it.
-	var weak := PlayerCharacter.from_dict(save["character"])
-	var strong := PlayerCharacter.from_dict(save["character"])
-	weak.sins["greed"] = 2
-	strong.sins["greed"] = -2
-	var entry := Temptation.def("change")
-	_check(Temptation.resist_cost(save, entry, weak) > Temptation.resist_cost(save, entry, strong), "besetting sin costs more to resist")
-	var before := Temptation.resist_cost(save, entry, weak)
-	Soul.confess(save, true)
-	_check(Temptation.resist_cost(save, entry, weak) < before, "fortified resists for less")
+	_check(not first.is_empty(), "a moment comes")
+	_check(Moments.roll(save, rng, 50.0).is_empty(), "only one moment per shift")
+	# The good grows a virtue; the failure costs and leaves a regret.
+	var drunk: Dictionary = Moments.def("drunk")
+	var patience := Virtue.level(save, "patience")
+	Moments.choose(save, drunk["options"][0], character)
+	_check(Virtue.level(save, "patience") > patience, "letting him go grows patience")
+	var good_money := Survival.money(save)
+	var good_stress := Survival.need(save, "stress")
+	var other := _new_save()
+	other["survival"]["stress"] = save["survival"]["stress"]
+	other["survival"]["money"] = save["survival"]["money"] + 4
+	var trust := Life.trust(other)
+	var other_patience := Virtue.level(other, "patience")
+	Moments.choose(other, drunk["options"][1], character)
+	_check(Virtue.level(other, "patience") < other_patience or other_patience == 0.0, "shouting weakens patience")
+	_check(Virtue.regrets(other).size() == 1, "and leaves a regret")
+	_check(Life.trust(other) < trust, "and the street saw it")
+	_check(Survival.money(other) <= good_money, "the failure is never the better strategy")
+
+
+func _test_virtue_habits() -> void:
+	var save := _new_save()
+	var character := PlayerCharacter.from_dict(save["character"])
+	var id := "charity" if not character.struggles.has("charity") and character.gift() != "charity" else "justice"
+	save["virtues"][id] = 0.0
+	var first := Virtue.level(save, id)
+	Virtue.act(save, id, null)
+	var gain_low := Virtue.level(save, id) - first
+	save["virtues"][id] = 80.0
+	Virtue.act(save, id, null)
+	var gain_high := Virtue.level(save, id) - 80.0
+	_check(gain_low > gain_high * 2.0, "habits grow more slowly as they settle")
+	# A struggle grows slowly at first.
+	var struggler := PlayerCharacter.new()
+	struggler.temperament = "choleric"
+	struggler.struggles = ["patience"]
+	save["virtues"]["patience"] = 0.0
+	Virtue.act(save, "patience", struggler)
+	_check(Virtue.level(save, "patience") < gain_low, "a struggle comes harder at first")
+	# Reaching a new rank says so.
+	save["virtues"]["justice"] = 14.0
+	_check(not Virtue.act(save, "justice", null).is_empty(), "a new rank is announced")
+	# Many small acts make a strong habit.
+	save["virtues"]["temperance"] = 0.0
+	for i in 60:
+		Virtue.act(save, "temperance", null)
+	_check(Virtue.level(save, "temperance") >= 70.0, "sixty acts build a strong habit: %s" % Virtue.rank(save, "temperance"))
+	# Effects are ease, never power over others.
+	save["virtues"]["patience"] = 100.0
+	_check(is_equal_approx(Virtue.insult_stress(save, 10.0), 5.0), "full patience halves an insult")
+	save["virtues"]["temperance"] = 100.0
+	_check(Virtue.need_rate(save) < 1.0, "temperance slows the needs")
+	# Settled habits keep growing in ordinary weeks; barely begun ones fade.
+	save["virtues"]["charity"] = 50.0
+	save["virtues"]["justice"] = 10.0
+	Virtue.drift(save, 4.0)
+	_check(Virtue.level(save, "charity") > 50.0 and Virtue.level(save, "justice") < 10.0, "habits settle or fade")
+
+
+func _test_parish() -> void:
+	var save := _new_save()
+	_check(Parish.sacraments_available(save), "a priest and a church at first")
+	var strength := Parish.strength(save)
+	save["survival"]["money"] = 50
+	Parish.give(save, 10)
+	_check(Parish.strength(save) > strength and Survival.money(save) == 40, "giving builds the parish")
+	_check(Parish.give(save, 1000).begins_with("You do not"), "cannot give what you do not have")
+	# Weeks without you, under a watchful state, wear it down.
+	var rng := _rng(4)
+	var weak := _new_save()
+	var arrested := false
+	for week in 80:
+		weak["world"]["time"] = Survival.now(weak) + 7.0 * Survival.DAY
+		Parish.week(weak, false, 0.9, rng)
+		if not Parish.priest_free(weak):
+			arrested = true
+	_check(arrested, "a weak parish can lose its priest for a while")
+	_check(Parish.closed(weak), "a parish nobody comes to is closed in the end")
+	_check(not Parish.sacraments_available(weak), "no sacraments in a closed church")
+	_check(not Soul.church_open(weak, 12 * 60.0), "a closed church stays closed")
+	# Faithful weeks keep it alive.
+	var strong := _new_save()
+	for week in 80:
+		strong["world"]["time"] = Survival.now(strong) + 7.0 * Survival.DAY
+		Parish.week(strong, true, 0.1, rng)
+	_check(not Parish.closed(strong), "a faithful parish survives")
+
+
+func _test_life() -> void:
+	var save := _new_save()
+	var character := PlayerCharacter.from_dict(save["character"])
+	_check(Life.illness_chance(40.0) == 0.0 and Life.illness_chance(70.0) > 0.0, "old age counts from the sixties")
+	_check(Life.illness_chance(85.0) > Life.illness_chance(70.0) * 3.0, "and more each year")
+	# Weeks pass in a summary.
+	var day := Survival.day_of(Survival.now(save))
+	var result := Life.pass_days(save, character, 28, _rng(2))
+	_check(Survival.day_of(Survival.now(save)) == day + int(result["days"]), "days pass: %d" % int(result["days"]))
+	_check(int(save["life"]["masses"]) >= 3, "Sundays at Mass while the weeks pass")
+	_check(int(save["life"]["served"]) > 100, "and work")
+	# Old: the last illness, the priest, a good death.
+	var old := _new_save()
+	old["life"]["born"] = Survival.now(old) - 88.0 * Life.YEAR
+	var rng := _rng(8)
+	var text := ""
+	for i in 2000:
+		text = Life.roll_illness(old, rng)
+		if not text.is_empty():
+			break
+	_check(Life.ill(old), "an old life comes to its end: %s" % text)
+	Virtue.fail(old, "patience", "Something small.")
+	var priest := Life.send_for_priest(old)
+	_check(priest.contains("anoints"), "the priest comes with the sacraments")
+	_check(Virtue.regrets(old).is_empty(), "and lays down what you carried")
+	var ending := Life.ending(old, character, "Died of old age.")
+	_check(ending["good_death"] and ending["parish_lives"], "a good death and a living parish")
+	_check(str(ending["title"]).contains("good death"), "the ending says so: %s" % ending["title"])
+	# Without a priest, no anointing.
+	var alone := _new_save()
+	alone["parish"]["closed"] = true
+	Life.send_for_priest(alone)
+	_check(not Life.ending(alone, character, "Died.")["good_death"], "no priest, no last sacraments")
 
 
 func _test_changelog() -> void:
@@ -589,51 +719,43 @@ func _test_changelog() -> void:
 func _test_horror() -> void:
 	var save := _new_save()
 	_check(save["horror"] is Dictionary, "saves carry horror state")
-	# Calm, faithful-neutral, daytime: weak.
-	save["soul"]["horror_lean"] = 0
+	for event: Dictionary in Horror.EVENTS:
+		_check(not event.has("side"), "nothing demonic: %s" % event["id"])
+	for gone in ["whisper", "mirror", "jumpscare", "shove", "smile", "lights_out"]:
+		_check(Horror.def(gone).is_empty(), "demonic event removed: %s" % gone)
+	# Calm, unnoticed, daytime: weak.
+	save["horror"]["attention"] = 0.0
 	save["survival"]["stress"] = 0.0
 	save["world"]["time"] = Survival.now(save) - fmod(Survival.now(save), Survival.DAY) + 12 * 60.0
 	var calm := Horror.intensity(save)
 	_check(calm < 0.1, "calm noon is quiet: %f" % calm)
-	# Leaning far toward sin, stressed, at night: strong, and demonic.
-	save["soul"]["horror_lean"] = 45
+	# Watched, stressed, at night: strong.
+	save["horror"]["attention"] = 90.0
 	save["survival"]["stress"] = 80.0
 	save["world"]["time"] = float(save["world"]["time"]) + 14 * 60.0
 	_check(Horror.is_night(Survival.now(save)), "2am is night")
-	_check(Horror.intensity(save) > 0.8, "sin, stress and night: strong")
-	_check(Horror.demonic_weight(save) > 0.9, "sin brings the demonic")
+	_check(Horror.intensity(save) > 0.8, "attention, stress and night: strong: %f" % Horror.intensity(save))
 	_check(Horror.chance(save) > Horror.CHANCE_MIN * 4.0, "strong horror comes often")
-	save["soul"]["horror_lean"] = -45
-	_check(Horror.demonic_weight(save) < 0.1, "faithfulness brings the state")
-	save["soul"]["horror_lean"] = 0
-	_check(is_equal_approx(Horror.demonic_weight(save), 0.5), "in between, both")
-	# Rules for when events can happen.
-	save["soul"]["horror_lean"] = 45
-	var context := {"in_church": false, "near_mirror": false, "hatch_open": false, "customers": false}
-	_check(not Horror.available(save, Horror.def("mirror"), context), "mirror needs the mirror")
-	context["near_mirror"] = true
+	Horror.fade(save, 10.0)
+	_check(float(save["horror"]["attention"]) < 90.0, "attention fades")
+	save["horror"]["attention"] = 90.0
+	var context := {"in_church": false, "hatch_open": false, "customers": false}
 	save["horror"]["dread"] = Horror.DREAD_NEEDED
 	save["world"]["time"] = float(save["world"]["time"]) + Survival.DAY
-	_check(Horror.available(save, Horror.def("mirror"), context), "near the mirror")
-	_check(not Horror.available(save, Horror.def("smile"), context), "a smiling customer needs customers")
 	_check(not Horror.available(save, Horror.def("inspector"), context), "no inspector at night")
 	context["in_church"] = true
-	_check(not Horror.available(save, Horror.def("whisper"), context), "nothing follows you into the church")
 	_check(Horror.roll(save, _rng(1), context).is_empty(), "the church is safe")
 	context["in_church"] = false
-	# Cooldowns.
-	Horror.apply(save, Horror.def("whisper"))
-	_check(not Horror.available(save, Horror.def("whisper"), context), "whisper cools down")
-	Survival.advance(save, 4 * 60.0)
-	_check(Horror.available(save, Horror.def("whisper"), context), "whisper can come back")
-	# Rolls happen when strong.
+	Horror.apply(save, Horror.def("drone"))
+	_check(not Horror.available(save, Horror.def("drone"), context), "drone cools down")
+	Survival.advance(save, 5 * 60.0)
+	_check(Horror.available(save, Horror.def("drone"), context), "drone can come back")
 	var rng := _rng(5)
 	var happened := 0
 	for i in 200:
 		if not Horror.roll(save, rng, context).is_empty():
 			happened += 1
 	_check(happened > 10, "a strong director acts: %d" % happened)
-	# Effects.
 	var money := Survival.money(save)
 	Horror.apply(save, Horror.def("tax"))
 	_check(Survival.money(save) == money - 12, "the surcharge takes money")
@@ -653,9 +775,20 @@ func _test_horror() -> void:
 	Horror.apply(save, Horror.def("raid"))
 	_check(Survival.stock(save, "candles") == 0 and Survival.stock(save, "sausages") == 5, "raid takes candles and half the meat")
 	_check(Survival.health(save) < health, "raid hurts")
+	save["world"]["stock"]["candles"] = 3
+	save["world"]["stock"]["sausages"] = 10
+	var warned := Horror.def("raid").duplicate()
+	warned["warned"] = true
+	Horror.apply(save, warned)
+	_check(Survival.stock(save, "candles") == 3 and Survival.stock(save, "sausages") >= 8, "a warning saves the candles and most of the stock")
+	# Prudence hears warnings sooner; fortitude takes fear's edge off.
+	var wise := _new_save()
+	wise["virtues"]["prudence"] = 90.0
+	wise["virtues"]["fortitude"] = 90.0
+	_check(Virtue.warning_chance(wise) > Virtue.warning_chance(save) + 0.3, "prudence brings warnings")
+	_check(Horror.scare_stress({"stress": 20.0}, 0, wise) < Horror.scare_stress({"stress": 20.0}, 0, save), "fortitude steadies you")
 
 
-## Every script compiles, including the ones the tests never run.
 func _test_scripts_compile() -> void:
 	for folder in ["res://scripts/core", "res://scripts/world", "res://scripts/ui", "res://scripts/screens", "res://scripts/autoload"]:
 		for file in DirAccess.get_files_at(folder):
@@ -665,18 +798,16 @@ func _test_scripts_compile() -> void:
 			_check(script != null and script.can_instantiate(), "compiles: %s/%s" % [folder, file])
 
 
-## Big scares grow out of small ones, are spread out, and are not regular.
+## Big events grow out of small ones, are spread out, and are not regular.
 func _test_scare_pacing() -> void:
 	var save := _new_save()
-	var context := {"in_church": false, "near_mirror": true, "hatch_open": false, "customers": false, "shutters_closed": false}
+	var context := {"in_church": false, "hatch_open": false, "customers": false, "shutters_closed": false}
 	_check(not Horror.big_ready(save), "nothing big on the first day")
-	# Worst case: far toward sin, stressed, play through 30 days.
 	var rng := _rng(11)
-	var faces: Array = []
 	var bigs: Array = []
 	var smalls := 0
 	for step in int(30 * Survival.DAY / Horror.ROLL_MINUTES):
-		save["soul"]["horror_lean"] = 50
+		save["horror"]["attention"] = 95.0
 		save["survival"]["stress"] = 85.0
 		Survival.advance(save, Horror.ROLL_MINUTES)
 		save["survival"]["health"] = 100.0
@@ -687,24 +818,19 @@ func _test_scare_pacing() -> void:
 		if event.is_empty():
 			continue
 		Horror.apply(save, event, 0, rng)
-		if event["id"] == "jumpscare":
-			faces.append(Survival.now(save))
 		if event.get("big", false):
 			bigs.append(Survival.now(save))
 		else:
 			smalls += 1
-	print("pacing: faces %d, big %d, small %d" % [faces.size(), bigs.size(), smalls])
-	_check(faces.size() >= 3 and faces.size() <= 15, "faces over 30 worst-case days: %d" % faces.size())
-	_check(bigs.size() <= 30, "at most about one big scare a day: %d" % bigs.size())
-	_check(smalls > bigs.size() * 2, "small scares outnumber big ones: %d to %d" % [smalls, bigs.size()])
+	print("pacing: big %d, small %d" % [bigs.size(), smalls])
+	_check(bigs.size() >= 3 and bigs.size() <= 30, "big events over 30 worst-case days: %d" % bigs.size())
+	_check(smalls > bigs.size() * 2, "small events outnumber big ones: %d to %d" % [smalls, bigs.size()])
 	var gaps: Array = []
-	for i in range(1, faces.size()):
-		var gap: float = (faces[i] - faces[i - 1]) / Survival.DAY
-		gaps.append(gap)
-		_check(gap >= 1.7, "faces at least ~2 days apart: %.2f" % gap)
+	for i in range(1, bigs.size()):
+		gaps.append((bigs[i] - bigs[i - 1]) / Survival.DAY)
 	if gaps.size() >= 2:
-		_check(absf(gaps.max() - gaps.min()) > 0.5, "faces are not on a schedule")
-	# A calm soul in daylight barely sees anything.
+		_check(absf(gaps.max() - gaps.min()) > 0.5, "big events are not on a schedule")
+	# Someone the state ignores, calm, sees nothing big.
 	var calm := _new_save()
 	var quiet := 0
 	for step in int(10 * Survival.DAY / Horror.ROLL_MINUTES):
@@ -714,14 +840,14 @@ func _test_scare_pacing() -> void:
 		calm["survival"]["thirst"] = 0.0
 		calm["survival"]["tiredness"] = 0.0
 		calm["survival"]["stress"] = 0.0
-		calm["soul"]["horror_lean"] = 0
+		calm["horror"]["attention"] = 0.0
 		var event := Horror.roll(calm, rng, context)
 		if not event.is_empty():
 			Horror.apply(calm, event, 0, rng)
 			if event.get("big", false):
 				quiet += 1
-	_check(quiet == 0, "no big scares for a calm, balanced soul: %d" % quiet)
-	_check(Horror.scare_stress({"stress": 20.0}, 10) < Horror.scare_stress({"stress": 20.0}, 0), "nerve softens scares")
+	_check(quiet == 0, "no big events for the unnoticed: %d" % quiet)
+	_check(Horror.scare_stress({"stress": 20.0}, 10) < Horror.scare_stress({"stress": 20.0}, 0), "nerve softens fear")
 
 
 func _test_night() -> void:
@@ -765,16 +891,6 @@ func _test_night() -> void:
 		nights["survival"]["thirst"] = 0.0
 		nights["survival"]["tiredness"] = 0.0
 	_check(burglaries >= 2 and burglaries <= 16, "burglaries over 60 nights: %d" % burglaries)
-	# The waking only comes to those leaning toward sin.
-	var faithful := _new_save()
-	faithful["soul"]["horror_lean"] = -40
-	Survival.advance(faithful, 2 * Survival.DAY)
-	faithful["horror"]["dread"] = 5
-	var wakings := 0
-	for i in 50:
-		if Horror.night(faithful, rng, true, 480.0).get("id", "") == "paralysis":
-			wakings += 1
-	_check(wakings == 0, "no demonic waking for the faithful")
 
 
 func _test_combat_rules() -> void:
@@ -810,7 +926,7 @@ func _test_combat_rules() -> void:
 	_check(members[0] == "thug" and members.size() == 5, "a gang always has someone to break in")
 	# The state: hunts for the faithful, stopped by paying.
 	var faithful := _new_save()
-	faithful["soul"]["horror_lean"] = -50
+	faithful["horror"]["attention"] = 95.0
 	faithful["survival"]["stress"] = 60.0
 	faithful["world"]["time"] = float(faithful["world"]["time"]) + 3 * Survival.DAY + 6 * 60.0
 	var hunts := 0
@@ -818,18 +934,18 @@ func _test_combat_rules() -> void:
 		faithful["horror"]["next_hunt"] = 0.0
 		if Combat.roll_hunt(faithful, rng) > 0:
 			hunts += 1
-	_check(hunts > 5, "drones hunt the faithful: %d of 400" % hunts)
+	_check(hunts > 5, "drones hunt the watched: %d of 400" % hunts)
 	var sinner := _new_save()
-	sinner["soul"]["horror_lean"] = 40
+	sinner["horror"]["attention"] = 0.0
 	sinner["world"]["time"] = float(sinner["world"]["time"]) + 3 * Survival.DAY
 	var none := 0
 	for i in 200:
 		sinner["horror"]["next_hunt"] = 0.0
 		none += Combat.roll_hunt(sinner, rng)
-	_check(none == 0, "the state does not hunt sinners")
+	_check(none == 0, "the state does not hunt those it ignores")
 	faithful["survival"]["money"] = 500
 	var price := Combat.compliance_price(faithful)
-	_check(price > Combat.compliance_price(sinner), "the faithful pay more to be left alone")
+	_check(price > Combat.compliance_price(sinner), "the watched pay more to be left alone")
 	_check(Combat.pay_compliance(faithful) == "" and Survival.money(faithful) == 500 - price, "pay the contribution")
 	_check(Combat.compliant(faithful), "left alone after paying")
 	var quiet := 0
@@ -837,11 +953,11 @@ func _test_combat_rules() -> void:
 		faithful["horror"]["next_hunt"] = 0.0
 		quiet += Combat.roll_hunt(faithful, rng)
 	_check(quiet == 0, "no drone hunts while compliant")
-	var context := {"in_church": false, "near_mirror": false, "hatch_open": true, "customers": true, "shutters_closed": false}
+	var context := {"in_church": false, "hatch_open": true, "customers": true, "shutters_closed": false}
 	var state_events := 0
 	for i in 400:
 		var event := Horror.roll(faithful, rng, context)
-		if not event.is_empty() and event["side"] == "state":
+		if not event.is_empty():
 			state_events += 1
 	_check(state_events == 0, "no state events while compliant")
 	Survival.advance(faithful, Combat.COMPLIANCE_DAYS * Survival.DAY + 10.0)

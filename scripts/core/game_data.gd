@@ -5,12 +5,8 @@ extends RefCounted
 const BASE_STAT := 5
 const FREE_POINTS := 6
 const MAX_FREE_PER_STAT := 3
-const MIN_SIN_LEVEL := -2  # Strong virtue.
-const MAX_SIN_LEVEL := 2  # Besetting sin.
-
-const TEMPTATION_PER_VICE_LEVEL := 0.30
-const TEMPTATION_PER_VIRTUE_LEVEL := 0.20
-const TEMPTATION_INCLINATION := 0.15
+## Struggles: the virtues that come hard. At least one, at most this many.
+const MAX_STRUGGLES := 2
 
 ## Survival. Needs run from 0 (fine) to 100 (critical).
 const NEEDS := [
@@ -56,14 +52,12 @@ const ACTIVITIES := [
 	{
 		"id": "rosary", "name": "Pray the rosary",
 		"desc": "At the home altar.",
-		"rates": {"hunger": 2.0, "thirst": 3.0, "tiredness": 1.0, "stress": -4.5},
-		"lean": -2,
+		"rates": {"hunger": 2.0, "thirst": 3.0, "tiredness": 1.0, "stress": -3.0},
 	},
 	{
 		"id": "mass", "name": "Go to Mass",
 		"desc": "At St. Brigid's, across the city.",
-		"rates": {"hunger": 2.0, "thirst": 3.0, "tiredness": 1.5, "stress": -6.0},
-		"lean": -3,
+		"rates": {"hunger": 2.0, "thirst": 3.0, "tiredness": 1.5, "stress": -3.0},
 	},
 ]
 
@@ -122,31 +116,6 @@ const NEWS_PERSECUTION := [
 	"Religious symbols in shop windows to be reviewed.",
 	"Score penalty for regular church attendance announced.",
 ]
-const NEWS_DEMONIC := [
-	"Third street vendor missing this month. Police see no link.",
-	"Residents report tall figures standing under streetlamps at night.",
-	"Animals found dead in a circle near the old rail yard.",
-	"Pharmacies report record sales of sleeping pills.",
-	"Night shift workers describe the same dream.",
-	"Man says something looked in his second floor window.",
-	"Whispering heard on police radios for a second night.",
-	"Missing vendor's trailer found with its lights still on.",
-]
-
-## Where the horror leans, from -100 to 100. Sin pushes it up toward the
-## demonic: easier survival, a compromised soul. Faithfulness pushes it down
-## toward the dystopian state: persecution and harder material survival.
-const HORROR_LEAN_MIN := -100
-const HORROR_LEAN_MAX := 100
-
-const LEVEL_NAMES := {
-	-2: "Strong virtue",
-	-1: "Steady",
-	0: "Ordinary",
-	1: "Struggling",
-	2: "Besetting",
-}
-
 const STATS := [
 	{"id": "cooking", "name": "Cooking", "desc": "Better food brings more customers."},
 	{"id": "business", "name": "Business", "desc": "Better prices, margins and deals."},
@@ -154,80 +123,67 @@ const STATS := [
 	{"id": "marksmanship", "name": "Marksmanship", "desc": "Steadier aim, faster reloads."},
 	{"id": "endurance", "name": "Endurance", "desc": "More health, longer shifts."},
 	{"id": "nerve", "name": "Nerve", "desc": "Stress builds slower. Scares hit softer."},
-	{"id": "vigilance", "name": "Vigilance", "desc": "Spot spies, thieves and worse."},
-	{"id": "devotion", "name": "Devotion", "desc": "Prayer goes deeper and lasts longer."},
+	{"id": "vigilance", "name": "Vigilance", "desc": "Spot spies and thieves sooner."},
 ]
 
+## A temperament gives natural abilities, one virtue that comes easily, and
+## one that usually comes hard (offered first as a struggle).
 const TEMPERAMENTS := [
 	{
 		"id": "choleric",
 		"name": "Choleric",
 		"tagline": "Quick to act, quick to command.",
 		"stats": {"marksmanship": 3, "business": 2, "nerve": 1, "charm": -2},
-		"inclined": ["pride", "anger"],
+		"gift": "fortitude",
+		"hard": "patience",
 	},
 	{
 		"id": "melancholic",
 		"name": "Melancholic",
 		"tagline": "Deep, exacting, slow to forgive itself.",
-		"stats": {"cooking": 3, "vigilance": 2, "devotion": 1, "charm": -1, "nerve": -1},
-		"inclined": ["envy", "sloth"],
+		"stats": {"cooking": 3, "vigilance": 2, "business": 1, "charm": -1, "nerve": -1},
+		"gift": "prudence",
+		"hard": "charity",
 	},
 	{
 		"id": "sanguine",
 		"name": "Sanguine",
 		"tagline": "Warm, quick to laugh, quick to forget.",
 		"stats": {"charm": 3, "endurance": 2, "business": 1, "vigilance": -2},
-		"inclined": ["lust", "gluttony"],
+		"gift": "charity",
+		"hard": "temperance",
 	},
 	{
 		"id": "phlegmatic",
 		"name": "Phlegmatic",
 		"tagline": "Steady, gentle, hard to move.",
-		"stats": {"nerve": 3, "endurance": 2, "devotion": 1, "business": -2},
-		"inclined": ["sloth", "greed"],
+		"stats": {"nerve": 3, "endurance": 2, "cooking": 1, "business": -2},
+		"gift": "patience",
+		"hard": "fortitude",
 	},
 ]
 
-## Every step toward a sin pays out vice_bonus. Every step toward its virtue pays
-## out virtue_bonus and costs one strength earned from a struggle elsewhere.
-const SINS := [
-	{
-		"id": "pride", "sin": "Pride", "virtue": "Humility",
-		"vice_bonus": {"nerve": 2, "marksmanship": 1},
-		"virtue_bonus": {"devotion": 2},
-	},
-	{
-		"id": "greed", "sin": "Greed", "virtue": "Generosity",
-		"vice_bonus": {"business": 3},
-		"virtue_bonus": {"charm": 2},
-	},
-	{
-		"id": "lust", "sin": "Lust", "virtue": "Chastity",
-		"vice_bonus": {"charm": 3},
-		"virtue_bonus": {"devotion": 1, "nerve": 1},
-	},
-	{
-		"id": "anger", "sin": "Anger", "virtue": "Meekness and Patience",
-		"vice_bonus": {"marksmanship": 3},
-		"virtue_bonus": {"nerve": 2},
-	},
-	{
-		"id": "gluttony", "sin": "Gluttony", "virtue": "Temperance",
-		"vice_bonus": {"cooking": 3},
-		"virtue_bonus": {"endurance": 2},
-	},
-	{
-		"id": "envy", "sin": "Envy", "virtue": "Kindness",
-		"vice_bonus": {"vigilance": 3},
-		"virtue_bonus": {"charm": 1, "devotion": 1},
-	},
-	{
-		"id": "sloth", "sin": "Sloth", "virtue": "Diligence",
-		"vice_bonus": {"endurance": 3},
-		"virtue_bonus": {"cooking": 1, "business": 1},
-	},
+## The virtues the moral life is built on. Each grows by habit: every act
+## makes the next one easier. What a virtue gives is that ease, never power
+## over others: effect says what it changes in the game.
+const VIRTUES := [
+	{"id": "patience", "name": "Patience", "desc": "Bearing insults, delays and other people's bad days without striking back.",
+		"effect": "Insults and long waits cost you less stress."},
+	{"id": "justice", "name": "Honesty", "desc": "Giving everyone their due: the right price, the right change, the truth.",
+		"effect": "People trust you sooner: more regulars, better tips."},
+	{"id": "charity", "name": "Charity", "desc": "Love of God, and of the neighbour in front of you.",
+		"effect": "What you give does more for the parish and the street."},
+	{"id": "fortitude", "name": "Fortitude", "desc": "Holding firm, and doing right, while you are afraid.",
+		"effect": "Threats and danger shake you less."},
+	{"id": "temperance", "name": "Temperance", "desc": "Measure in food, drink, rest, screens and pride.",
+		"effect": "Hunger, thirst and tiredness creep up more slowly."},
+	{"id": "prudence", "name": "Prudence", "desc": "Seeing what the moment asks, and choosing it well.",
+		"effect": "You notice danger coming sooner, and hear warnings in time."},
 ]
+## How a habit stands, by level (0 to 100).
+const VIRTUE_RANKS := [[0, "Beginning"], [15, "Growing"], [40, "Steady"], [70, "Strong"], [90, "Second nature"]]
+## Your age when the story starts, by the Age look.
+const START_AGES := {"young": 24, "grown": 38, "old": 56}
 
 const SKIN_TONES := {
 	"porcelain": "#f0d2bb", "fair": "#e2b796", "olive": "#c79a6e",
@@ -333,8 +289,16 @@ static func temperament_def(id: String) -> Dictionary:
 	return _find(TEMPERAMENTS, id)
 
 
-static func sin_def(id: String) -> Dictionary:
-	return _find(SINS, id)
+static func virtue_def(id: String) -> Dictionary:
+	return _find(VIRTUES, id)
+
+
+static func virtue_rank(level: float) -> String:
+	var name: String = VIRTUE_RANKS[0][1]
+	for rank: Array in VIRTUE_RANKS:
+		if level >= float(rank[0]):
+			name = rank[1]
+	return name
 
 
 static func appearance_def(id: String) -> Dictionary:

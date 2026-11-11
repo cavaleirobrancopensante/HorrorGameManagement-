@@ -73,7 +73,8 @@ func _build() -> void:
 
 
 func _soul_line(save: Dictionary, now: float) -> String:
-	var grace := "In a state of grace." if bool(save["soul"].get("state_of_grace", true)) else "Not in a state of grace."
+	if not Parish.sacraments_available(save):
+		return "There is no Mass at St. Brigid's for now. " + Parish.describe(save)
 	var sunday := Survival.mass_sunday(now)
 	var mass := ""
 	if sunday > 0:
@@ -85,7 +86,7 @@ func _soul_line(save: Dictionary, now: float) -> String:
 			mass = "You have been to Mass for this Sunday."
 		else:
 			mass = "Sunday Mass: Saturday evening vigil, or Sunday morning, noon or evening."
-	return "%s %s" % [grace, mass]
+	return mass
 
 
 func _shift_row(index: int, current: int) -> Control:

@@ -152,8 +152,9 @@ func tick(delta: float) -> void:
 			customer.mood -= customer.decay * delta
 			if customer.mood <= 0.0:
 				_send_away(i)
-				Survival.change_need(game.save, "stress", 3.0)
+				Survival.change_need(game.save, "stress", Virtue.insult_stress(game.save, 3.0))
 				GameLog.bad("A customer gave up waiting and left angry.")
+				Life.change_trust(game.save, -1.0)
 				message.emit("A customer gave up waiting and left angry.")
 				continue
 
@@ -172,7 +173,9 @@ func _skill() -> float:
 ## Brings a new customer to a free spot. instant skips the walk, for tests.
 func spawn(instant := false) -> void:
 	var shift := Survival.shift_index(Survival.now(game.save))
-	_spawn_wait = StandRules.spawn_interval(shift, _skill(), Survival.has_upgrade(game.save, "neon")) * _rng.randf_range(0.7, 1.3)
+	# The more the street trusts you, the more people come.
+	var trusted := 1.15 - 0.3 * Life.trust(game.save) / 100.0
+	_spawn_wait = StandRules.spawn_interval(shift, _skill(), Survival.has_upgrade(game.save, "neon")) * trusted * _rng.randf_range(0.7, 1.3)
 	var free := spots.find(null)
 	if free == -1:
 		return
@@ -666,8 +669,11 @@ func _give(customer: Customer) -> void:
 		return
 	customer.pay()
 	var paid := StandRules.price(customer.order)
-	var tip := StandRules.tip(customer.mood, _charm())
+	# Trust: regulars who know you tip a little more.
+	var tip := roundi(StandRules.tip(customer.mood, _charm()) * (0.8 + 0.4 * Life.trust(game.save) / 100.0))
 	game.save["survival"]["money"] = Survival.money(game.save) + paid + tip
+	Life.count(game.save, "served")
+	Life.change_trust(game.save, 0.4 if customer.mood >= StandRules.MOOD_ANGRY else -0.5)
 	Sound.play("till")
 	var face := StandRules.face(customer.mood)
 	var mood_text: String = {"happy": "They look pleased.", "neutral": "They take it without a word.", "angry": "They snatch it and go."}[face]

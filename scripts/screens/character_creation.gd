@@ -1,13 +1,13 @@
 extends Control
-## New game, in four steps: who you are, your temperament, your conscience,
+## New game, in four steps: who you are, your temperament, your struggles,
 ## your abilities. Your character stands on the left in 3D as you build them;
 ## each step says in a sentence what it is for; every control has a tooltip,
 ## and the help line along the bottom repeats it for touch screens.
 
 const STEPS := [
 	["Who you are", "Your name and how you look. This is who you will see in the mirror and on the cameras."],
-	["Temperament", "Your natural character. It shapes your abilities and the sins that tempt you most. There is no wrong choice."],
-	["Conscience", "Mark the sins you struggle with. A struggle tempts you more but sharpens a skill. To be strong in a virtue, you need a struggle somewhere else."],
+	["Temperament", "Your natural character. It shapes your abilities, and which virtue comes easily to you. There is no wrong choice."],
+	["Struggles", "Everyone has a virtue that comes hard. Choose one or two. A struggle gives you nothing; it only starts lower and grows slowly at first. Every virtue grows by habit, one good act at a time."],
 	["Abilities", "Spend your remaining points on what you are good at. Point at any ability to see what it does."],
 ]
 ## The looks you choose on the first step, in the order they are shown.
@@ -66,7 +66,7 @@ func _build() -> void:
 	holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	holder.clip_contents = true
 	right.add_child(holder)
-	for build: Callable in [_build_looks_page, _build_temperament_page, _build_conscience_page, _build_abilities_page]:
+	for build: Callable in [_build_looks_page, _build_temperament_page, _build_struggles_page, _build_abilities_page]:
 		var scroll := ScrollContainer.new()
 		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -209,8 +209,9 @@ func _make_temperament_card(def: Dictionary) -> Control:
 	card.custom_minimum_size.y = 236
 	card.clip_contents = true
 	var stats := _stats_text(def["stats"])
-	var sins: Array = def["inclined"].map(func(sin_id: String) -> String: return GameData.sin_def(sin_id)["sin"])
-	UiKit.tip(card, "%s: %s Abilities: %s. More easily tempted by %s and %s." % [def["name"], def["tagline"], stats, sins[0], sins[1]])
+	var easy: String = GameData.virtue_def(def["gift"])["name"]
+	var hard: String = GameData.virtue_def(def["hard"])["name"]
+	UiKit.tip(card, "%s: %s Abilities: %s. %s comes easily; %s often comes hard." % [def["name"], def["tagline"], stats, easy, hard.to_lower()])
 	var inner := MarginContainer.new()
 	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -223,7 +224,7 @@ func _make_temperament_card(def: Dictionary) -> Control:
 	column.add_child(UiKit.heading(def["name"], 38))
 	column.add_child(UiKit.wrapped_label(def["tagline"], UiKit.SIZE_SMALL))
 	column.add_child(UiKit.wrapped_label("Good at: " + stats, 20, UiKit.LITURGICAL_GOLD))
-	column.add_child(UiKit.wrapped_label("Tempted by: %s, %s" % sins, 20, Color("#e8767c")))
+	column.add_child(UiKit.wrapped_label("Comes easily: %s. Often hard: %s." % [easy, hard.to_lower()], 20, Color("#e8c08a")))
 	for child in column.get_children():
 		(child as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_refreshers.append(func() -> void:
@@ -243,100 +244,73 @@ func _stats_text(stats: Dictionary) -> String:
 
 func _choose_temperament(id: String) -> void:
 	character.temperament = id
+	# The new temperament's gift cannot also be a struggle.
+	character.struggles.erase(character.gift())
 	_refresh()
 
 
-# Step 3: conscience -------------------------------------------------------------
+# Step 3: struggles ------------------------------------------------------------
 
-func _build_conscience_page() -> Control:
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 6)
-	# A legend over the five steps of each row.
-	var legend := HBoxContainer.new()
-	legend.add_theme_constant_override("separation", 4)
-	var spacer := Control.new()
-	spacer.custom_minimum_size.x = 230
-	legend.add_child(spacer)
-	for level in range(GameData.MIN_SIN_LEVEL, GameData.MAX_SIN_LEVEL + 1):
-		var name := UiKit.label(GameData.LEVEL_NAMES[level].replace(" ", "\n"), 16, _level_colour(level))
-		name.custom_minimum_size.x = 64
-		name.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-		name.size_flags_vertical = Control.SIZE_FILL
-		name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		legend.add_child(name)
-	column.add_child(legend)
-	for def: Dictionary in GameData.SINS:
-		column.add_child(_make_sin_row(def))
-	var left := UiKit.label("", UiKit.SIZE_SMALL, UiKit.LITURGICAL_GOLD)
-	column.add_child(left)
-	_refreshers.append(func() -> void:
-		left.text = "Virtue steps you can still take: %d (each struggle allows one)" % character.strengths_left())
-	return column
+func _build_struggles_page() -> Control:
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	for def: Dictionary in GameData.VIRTUES:
+		grid.add_child(_make_virtue_card(def))
+	return grid
 
 
-func _make_sin_row(def: Dictionary) -> Control:
+## A virtue as a card: press it to mark it as a struggle.
+func _make_virtue_card(def: Dictionary) -> Control:
 	var id: String = def["id"]
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	var names := VBoxContainer.new()
-	names.custom_minimum_size.x = 230
-	names.add_theme_constant_override("separation", -6)
-	names.add_child(UiKit.label(def["virtue"], 18, UiKit.LITURGICAL_GOLD))
-	names.add_child(UiKit.label("against " + def["sin"], 18, Color("#e8767c")))
-	row.add_child(names)
-	var segments: Array[Button] = []
-	for level in range(GameData.MIN_SIN_LEVEL, GameData.MAX_SIN_LEVEL + 1):
-		var segment := UiKit.button("", _set_sin.bind(id, level), 64)
-		segment.custom_minimum_size.y = 50
-		UiKit.tip(segment, "%s: %s" % [def["sin"], _sin_text(def, level)])
-		row.add_child(segment)
-		segments.append(segment)
-	var effect := UiKit.wrapped_label("", 18, UiKit.TALLOW)
-	effect.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(effect)
+	var card := UiKit.button("", _toggle_struggle.bind(id))
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size.y = 150
+	card.clip_contents = true
+	UiKit.tip(card, "%s: %s %s" % [def["name"], def["desc"], def["effect"]])
+	var inner := MarginContainer.new()
+	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for side in ["left", "right", "top", "bottom"]:
+		inner.add_theme_constant_override("margin_" + side, 12)
+	card.add_child(inner)
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inner.add_child(column)
+	var title := HBoxContainer.new()
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(title)
+	var name := UiKit.heading(def["name"], 32)
+	name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_child(name)
+	var mark := UiKit.label("", 18, UiKit.SODIUM)
+	title.add_child(mark)
+	column.add_child(UiKit.wrapped_label(def["desc"], 18))
+	column.add_child(UiKit.wrapped_label(def["effect"], 16, UiKit.ASH))
+	for child in column.get_children() + title.get_children():
+		(child as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_refreshers.append(func() -> void:
-		var current: int = character.sins[id]
-		for i in segments.size():
-			var level := GameData.MIN_SIN_LEVEL + i
-			var fill := _level_colour(level)
-			if level == current:
-				UiKit.paint(segments[i], fill, UiKit.TALLOW, 4)
-			else:
-				UiKit.paint(segments[i], fill.darkened(0.62), Color(fill, 0.45), 2)
-		effect.text = _sin_text(def, current))
-	return row
+		var gift := character.gift() == id
+		var struggle := character.struggles.has(id)
+		mark.text = "A STRUGGLE" if struggle else ("COMES EASILY" if gift else "")
+		mark.add_theme_color_override("font_color", Color("#e8767c") if struggle else UiKit.LITURGICAL_GOLD)
+		if struggle:
+			UiKit.paint(card, Color("#4a2230"), Color("#e8767c"), 4)
+		elif gift:
+			UiKit.paint(card, UiKit.VESTMENT, UiKit.LITURGICAL_GOLD, 3)
+		else:
+			UiKit.paint(card, UiKit.VESTMENT, UiKit.VESTMENT_LIGHT, 2))
+	return card
 
 
-func _level_colour(level: int) -> Color:
-	match level:
-		-2: return UiKit.LITURGICAL_GOLD
-		-1: return Color("#9c8a55")
-		1: return Color("#a03a42")
-		2: return Color("#d9303c")
-	return Color("#6d6275")
-
-
-func _sin_text(def: Dictionary, level: int) -> String:
-	var parts: PackedStringArray = []
-	var bonus: Dictionary = def["vice_bonus"] if level > 0 else def["virtue_bonus"]
-	if level != 0:
-		for stat_id: String in bonus:
-			parts.append("%s +%d" % [GameData.stat_def(stat_id)["name"], absi(level) * int(bonus[stat_id])])
-	var strength := 1.0
-	match level:
-		-2: strength = 0.4
-		-1: strength = 0.7
-		1: strength = 1.4
-		2: strength = 1.9
-	parts.append("tempted %s" % ("far less" if strength < 0.5 else ("less" if strength < 1.0 else ("as usual" if strength == 1.0 else ("more" if strength < 1.5 else "far more")))))
-	return "%s: %s" % [GameData.LEVEL_NAMES[level], ", ".join(parts)]
-
-
-func _set_sin(id: String, level: int) -> void:
-	if character.set_sin_level(id, level):
+func _toggle_struggle(id: String) -> void:
+	if character.toggle_struggle(id):
 		_error = ""
+	elif id == character.gift():
+		_error = "That one comes easily to a %s. Choose another." % GameData.temperament_def(character.temperament)["name"].to_lower()
 	else:
-		_error = "To be that strong in a virtue, first mark a struggle with another sin."
+		_error = "Choose at most %d. Press one again to unmark it." % GameData.MAX_STRUGGLES
 	_refresh()
 
 
@@ -434,7 +408,7 @@ func _randomize_step() -> void:
 		1:
 			character.randomize_temperament(_rng)
 		2:
-			character.randomize_sins(_rng)
+			character.randomize_struggles(_rng)
 		3:
 			character.randomize_free_points(_rng)
 	_refresh()
@@ -495,10 +469,10 @@ func _refresh() -> void:
 
 func _refresh_status() -> void:
 	var name := character.full_name.strip_edges()
-	var fault := character.predominant_fault()
+	var fault: String = character.struggles[0] if not character.struggles.is_empty() else ""
 	_summary.text = "%s\n%s%s" % [
 		name if not name.is_empty() else "Unnamed",
 		GameData.temperament_def(character.temperament)["name"],
-		"" if fault.is_empty() else ", struggles with " + GameData.sin_def(fault)["sin"].to_lower(),
+		"" if fault.is_empty() else ", finds %s hard" % GameData.virtue_def(fault)["name"].to_lower(),
 	]
 	_status.text = _error

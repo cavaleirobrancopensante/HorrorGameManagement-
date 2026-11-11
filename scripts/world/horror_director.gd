@@ -1,11 +1,10 @@
 class_name HorrorDirector
 extends Node
 ## Stages the horror in the world. Horror (the rules) decides what comes; this
-## decides how you see and hear it: shapes only the mirror shows, shapes only
-## the cameras catch, the lights dying, a face in your face, a drone at the
-## window, enforcers at the door.
+## decides how you see and hear it: a drone at the window, a man watching
+## from under the lamp, someone at your bins seen only on the cameras, the
+## power cut, enforcers at the door. Prudence can bring a warning first.
 
-const MIRROR := Vector3(10.99, 1.6, 1.275)
 const LAMP := Vector3(8.3, TrailerWorld.GROUND, 10.4)
 const ACROSS_STREET := Vector3(6.8, TrailerWorld.GROUND, 10.8)
 const HOME_WINDOW := Vector3(8.3, 1.45, TrailerWorld.WIDTH + 0.9)
@@ -14,16 +13,14 @@ const ENTRANCE := Vector3(4.85, TrailerWorld.GROUND, 4.4)
 var game: TrailerGame
 var _minutes := 0.0
 var _rng := RandomNumberGenerator.new()
-## Shapes that vanish once you have looked straight at them for a moment:
+## People who leave once you have looked straight at them for a moment:
 ## [node, seconds left, seconds looked at].
 var _watchers: Array = []
-var _shadow_texture: ImageTexture
 
 
 func setup(owner_game: TrailerGame) -> void:
 	game = owner_game
 	_rng.randomize()
-	_shadow_texture = _make_shadow()
 
 
 func tick(delta: float, busy: bool, in_church: bool) -> void:
@@ -39,15 +36,27 @@ func tick(delta: float, busy: bool, in_church: bool) -> void:
 		return
 	var gang := Combat.roll_gang(game.save, _rng)
 	if gang > 0:
-		start_gang(gang)
+		_warn_then("Mrs. Duffy's grandson runs past the hatch: \"There's a gang coming up from the canal. Shut your door!\"", start_gang.bind(gang))
 		return
 	var hunt := Combat.roll_hunt(game.save, _rng)
 	if hunt > 0:
-		start_hunt(hunt)
+		_warn_then("Your phone buzzes: a message from a parishioner. \"Drones over the market, heading your way.\"", start_hunt.bind(hunt))
 		return
 	var event := Horror.roll(game.save, _rng, context(in_church))
 	if not event.is_empty():
 		run(event)
+
+
+## Prudence: sometimes a warning reaches you before trouble does, with a
+## little time to get ready.
+func _warn_then(warning: String, then: Callable, seconds := 25.0) -> bool:
+	if _rng.randf() >= Virtue.warning_chance(game.save):
+		then.call()
+		return false
+	game.hud.toast(warning)
+	GameLog.add("info", "Warned in time: " + warning)
+	get_tree().create_timer(seconds).timeout.connect(then)
+	return true
 
 
 # Fights -----------------------------------------------------------------------
@@ -123,7 +132,7 @@ func _update_fight() -> void:
 			Survival.change_need(game.save, "stress", -10.0)
 		"hunt":
 			game.hud.toast("The sky is empty. Civic Link will remember this.")
-			Survival.change_lean(game.save, -1)
+			Horror.notice(game.save, 5.0)
 		"burglar":
 			game._after_night("You fought him off. He is gone, and so is your sleep.", true)
 	_fight = ""
@@ -134,10 +143,8 @@ func context(in_church: bool) -> Dictionary:
 	for customer in game.stand.spots:
 		if customer != null and is_instance_valid(customer) and customer.at_hatch:
 			customers = true
-	var at := game.player.global_position
 	return {
 		"in_church": in_church,
-		"near_mirror": at.x > 9.0 and at.distance_to(Vector3(MIRROR.x, at.y, MIRROR.z)) < 2.2,
 		"hatch_open": bool(game.save["world"]["hatch_open"]),
 		"customers": customers,
 		"shutters_closed": bool(game.save["world"]["shutters_closed"]),
@@ -146,33 +153,37 @@ func context(in_church: bool) -> Dictionary:
 
 ## Plays an event: its effect on you, then the scene.
 func run(event: Dictionary) -> void:
+	if event["id"] == "raid":
+		var warned := _rng.randf() < Virtue.warning_chance(game.save)
+		if warned:
+			game.hud.toast("A soft knock at the back: a neighbour. \"Enforcers on the next street. Hide what you need to.\" You have a minute.")
+			GameLog.add("info", "Warned in time: a raid is coming.")
+			await get_tree().create_timer(30.0).timeout
+		event = event.duplicate()
+		event["warned"] = warned
 	var text := Horror.apply(game.save, event, game.character.stat_value("nerve"), _rng)
 	match event["id"]:
-		"whisper", "smile":
-			Sound.play("tempt", 0.08, -4.0)
-			game.hud.toast(text)
 		"knock":
 			Sound.play("knock")
 			await get_tree().create_timer(2.6).timeout
 			game.hud.toast(text)
 		"camera_shape":
 			Sound.play("beep")
-			_shape(Vector3(1.6, TrailerWorld.GROUND, 6.2), TrailerWorld.LAYER_CCTV_ONLY, 90.0)
+			var man: PersonRig = People.place(game.world, People.role("informant", _rng), Vector3(1.6, TrailerWorld.GROUND, 6.2), PI * 0.8)
+			man.hold_pose = "reach"
+			man.set_layers(TrailerWorld.LAYER_CCTV_ONLY)
+			get_tree().create_timer(90.0).timeout.connect(man.queue_free)
 			game.hud.toast(text)
-		"lights_out":
-			await _lights_out(text)
-		"mirror":
-			await _mirror(text)
+		"power_cut":
+			Sound.play("buzz", 0.0, -4.0)
+			game.world.blackout(true)
+			game.hud.toast(text)
+			await get_tree().create_timer(_rng.randf_range(40.0, 75.0)).timeout
+			game.world.blackout(false)
+			game.hud.toast("The power comes back, with a buzz from every light.")
 		"watcher":
-			var shape := _shape(LAMP, TrailerWorld.LAYER_WORLD, 120.0)
-			_watchers.append([shape, 120.0, 0.0])
-			game.hud.toast(text)
-		"jumpscare":
-			_jumpscare()
-		"shove":
-			Sound.play("scare", 0.05, -6.0)
-			_shake(0.5, 0.12)
-			game.hud.flash(Color(0.5, 0.0, 0.0, 0.6))
+			var watcher: PersonRig = People.place(game.world, People.role("informant", _rng), LAMP, PI)
+			_watchers.append([watcher, 120.0, 0.0])
 			game.hud.toast(text)
 		"drone":
 			Sound.play("civic_drone", 0.05, -2.0)
@@ -187,8 +198,8 @@ func run(event: Dictionary) -> void:
 			get_tree().create_timer(3.0).timeout.connect(game.world.set_hatch_open.bind(false, true))
 			get_tree().create_timer(8.0).timeout.connect(inspector.queue_free)
 		"informant":
-			var man: Node3D = People.place(game.world, People.role("informant", _rng), ACROSS_STREET, 0.0)
-			get_tree().create_timer(180.0).timeout.connect(man.queue_free)
+			var spy: Node3D = People.place(game.world, People.role("informant", _rng), ACROSS_STREET, 0.0)
+			get_tree().create_timer(180.0).timeout.connect(spy.queue_free)
 			game.hud.toast(text)
 		"raid":
 			await _raid(text)
@@ -200,46 +211,9 @@ func _check_death() -> void:
 		game._die("They found you on the trailer floor in the morning.")
 
 
-# Shapes -----------------------------------------------------------------------
+# Watchers ---------------------------------------------------------------------
 
-## A tall black shape with two points of light for eyes.
-func _make_shadow() -> ImageTexture:
-	var image := Image.create(24, 104, false, Image.FORMAT_RGBA8)
-	image.fill(Color(0, 0, 0, 0))
-	var black := Color(0.015, 0.008, 0.02)
-	image.fill_rect(Rect2i(8, 0, 8, 12), black)
-	image.fill_rect(Rect2i(10, 12, 4, 3), black)
-	image.fill_rect(Rect2i(6, 15, 12, 50), black)
-	image.fill_rect(Rect2i(2, 17, 4, 66), black)
-	image.fill_rect(Rect2i(18, 17, 4, 66), black)
-	image.fill_rect(Rect2i(7, 65, 4, 39), black)
-	image.fill_rect(Rect2i(13, 65, 4, 39), black)
-	image.set_pixel(10, 5, Color(1.0, 0.25, 0.15))
-	image.set_pixel(13, 5, Color(1.0, 0.25, 0.15))
-	return ImageTexture.create_from_image(image)
-
-
-func _shape(at: Vector3, layers: int, seconds: float) -> Sprite3D:
-	var shape := Sprite3D.new()
-	shape.texture = _shadow_texture
-	shape.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	shape.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-	shape.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	shape.shaded = false
-	shape.pixel_size = 0.019
-	shape.layers = layers
-	game.world.add_child(shape)
-	shape.global_position = at + Vector3(0.0, 104.0 * 0.019 / 2.0, 0.0)
-	var ref: WeakRef = weakref(shape)
-	get_tree().create_timer(seconds).timeout.connect(func() -> void:
-		var still: Object = ref.get_ref()
-		if still != null:
-			still.queue_free()
-	)
-	return shape
-
-
-## Watchers go when you look straight at them.
+## A watcher walks off once you have looked straight at him for a moment.
 func _update_watchers(delta: float) -> void:
 	var camera: Camera3D = game.player.camera
 	for entry: Array in _watchers.duplicate():
@@ -254,46 +228,6 @@ func _update_watchers(delta: float) -> void:
 			if float(entry[2]) > 1.2:
 				shape.queue_free()
 				_watchers.erase(entry)
-
-
-func _lights_out(text: String) -> void:
-	Sound.play("buzz", 0.0, -4.0)
-	game.world.blackout(true)
-	var camera: Camera3D = game.player.camera
-	var ahead := -camera.global_basis.z
-	ahead.y = 0.0
-	var at := game.player.global_position + ahead.normalized() * 1.9
-	at.x = clampf(at.x, 0.4, 10.6)
-	at.z = clampf(at.z, 0.3, 2.9)
-	var shape := _shape(Vector3(at.x, 0.0, at.z), TrailerWorld.LAYER_WORLD, 2.4)
-	await get_tree().create_timer(2.4).timeout
-	if is_instance_valid(shape):
-		shape.queue_free()
-	game.world.blackout(false)
-	game.hud.toast(text)
-
-
-func _mirror(text: String) -> void:
-	var camera: Camera3D = game.player.camera
-	var behind := camera.global_basis.z
-	behind.y = 0.0
-	# Behind you and a little to one side, so it shows over your shoulder.
-	var at := game.player.global_position + behind.normalized() * 0.8 + camera.global_basis.x * 0.32
-	_shape(Vector3(at.x, 0.0, at.z), TrailerWorld.LAYER_REFLECTION, 1.8)
-	Sound.play("tempt", 0.0, -8.0)
-	await get_tree().create_timer(1.8).timeout
-	game.hud.toast(text)
-
-
-func _jumpscare() -> void:
-	Sound.play("scare")
-	_shake(0.6, 0.16)
-	var face := JumpscareFace.new()
-	game.hud.add_child(face)
-	face.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	await get_tree().create_timer(0.55).timeout
-	face.queue_free()
-	game.world.flicker()
 
 
 func _shake(seconds: float, strength: float) -> void:

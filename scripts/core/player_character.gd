@@ -5,7 +5,9 @@ extends RefCounted
 var full_name := ""
 var temperament := "choleric"
 var appearance := {}
-var sins := {}  # sin id -> level, from MIN_SIN_LEVEL to MAX_SIN_LEVEL.
+## The virtues that come hard to this person, by id: one or two. A struggle
+## gives nothing; it only means that virtue starts low and grows slowly at first.
+var struggles: Array[String] = []
 var free_points := {}  # stat id -> points placed by the player.
 
 
@@ -19,9 +21,7 @@ func reset() -> void:
 	appearance = {}
 	for def: Dictionary in GameData.APPEARANCE:
 		appearance[def["id"]] = def["options"][0][0]
-	sins = {}
-	for def: Dictionary in GameData.SINS:
-		sins[def["id"]] = 0
+	struggles = []
 	free_points = {}
 	for def: Dictionary in GameData.STATS:
 		free_points[def["id"]] = 0
@@ -32,12 +32,6 @@ func reset() -> void:
 func stat_value(stat_id: String) -> int:
 	var total: int = GameData.BASE_STAT + int(free_points.get(stat_id, 0))
 	total += int(GameData.temperament_def(temperament)["stats"].get(stat_id, 0))
-	for def: Dictionary in GameData.SINS:
-		var level: int = sins[def["id"]]
-		if level > 0:
-			total += level * int(def["vice_bonus"].get(stat_id, 0))
-		elif level < 0:
-			total += -level * int(def["virtue_bonus"].get(stat_id, 0))
 	return maxi(total, 0)
 
 
@@ -66,56 +60,38 @@ func change_free_point(stat_id: String, delta: int) -> bool:
 	return true
 
 
-# Sins and virtues -------------------------------------------------------------
+# Virtues ----------------------------------------------------------------------
 
-## How many more steps toward virtue the character can still take.
-func strengths_left() -> int:
-	var total := 0
-	for level: int in sins.values():
-		total += level
-	return total
+## The virtue this temperament finds easy.
+func gift() -> String:
+	return GameData.temperament_def(temperament)["gift"]
 
 
-func set_sin_level(sin_id: String, level: int) -> bool:
-	if level < GameData.MIN_SIN_LEVEL or level > GameData.MAX_SIN_LEVEL:
+## Marks a virtue as a struggle, or unmarks it. Returns false if that would
+## make more than MAX_STRUGGLES, or mark the temperament's gift.
+func toggle_struggle(virtue_id: String) -> bool:
+	if struggles.has(virtue_id):
+		struggles.erase(virtue_id)
+		return true
+	if struggles.size() >= GameData.MAX_STRUGGLES or virtue_id == gift():
 		return false
-	var previous: int = sins[sin_id]
-	sins[sin_id] = level
-	if strengths_left() < 0:
-		sins[sin_id] = previous
-		return false
+	struggles.append(virtue_id)
 	return true
 
 
-func has_struggle() -> bool:
-	for level: int in sins.values():
-		if level > 0:
-			return true
-	return false
+## Where each virtue starts: the gift well on its way, struggles at nothing,
+## the rest a little begun.
+func starting_virtues() -> Dictionary:
+	var levels := {}
+	for def: Dictionary in GameData.VIRTUES:
+		var id: String = def["id"]
+		levels[id] = 0.0 if struggles.has(id) else (22.0 if id == gift() else 8.0)
+	return levels
 
 
-## Multiplier for how hard this sin tempts the character. 1.0 is ordinary.
-func temptation_strength(sin_id: String) -> float:
-	var level: int = sins[sin_id]
-	var strength := 1.0
-	if level > 0:
-		strength += level * GameData.TEMPTATION_PER_VICE_LEVEL
-	else:
-		strength += level * GameData.TEMPTATION_PER_VIRTUE_LEVEL
-	if sin_id in GameData.temperament_def(temperament)["inclined"]:
-		strength += GameData.TEMPTATION_INCLINATION
-	return strength
-
-
-## The worst struggle, which is the tradition's "predominant fault". Empty if none.
-func predominant_fault() -> String:
-	var worst := ""
-	var worst_level := 0
-	for def: Dictionary in GameData.SINS:
-		if sins[def["id"]] > worst_level:
-			worst_level = sins[def["id"]]
-			worst = def["id"]
-	return worst
+## How old they are when the story begins.
+func start_age() -> int:
+	return int(GameData.START_AGES.get(appearance.get("age", "grown"), 38))
 
 
 # Validation -------------------------------------------------------------------
@@ -124,10 +100,8 @@ func predominant_fault() -> String:
 func validation_error() -> String:
 	if full_name.strip_edges().is_empty():
 		return "Give your character a name."
-	if not has_struggle():
-		return "Choose at least one struggle. Nobody starts without a fault."
-	if strengths_left() < 0:
-		return "Too many virtues for the struggles chosen."
+	if struggles.is_empty():
+		return "Choose at least one struggle: a virtue that comes hard to you."
 	if free_points_left() < 0:
 		return "Too many ability points spent."
 	return ""
@@ -167,19 +141,19 @@ func randomize_temperament(rng: RandomNumberGenerator) -> void:
 	temperament = _pick(GameData.TEMPERAMENTS, rng)["id"]
 
 
-func randomize_sins(rng: RandomNumberGenerator) -> void:
-	for id: String in sins:
-		sins[id] = 0
-	var order: Array = sins.keys()
-	_shuffle(order, rng)
-	var struggles := rng.randi_range(1, 4)
-	for i in struggles:
-		sins[order[i]] = rng.randi_range(1, GameData.MAX_SIN_LEVEL)
-	var remaining: Array = order.slice(struggles)
-	for id: String in remaining:
-		var budget := mini(strengths_left(), -GameData.MIN_SIN_LEVEL)
-		if budget > 0:
-			sins[id] = -rng.randi_range(0, budget)
+func randomize_struggles(rng: RandomNumberGenerator) -> void:
+	struggles = []
+	var hard: String = GameData.temperament_def(temperament)["hard"]
+	if rng.randf() < 0.6:
+		struggles.append(hard)
+	var ids: Array = GameData.VIRTUES.map(func(def: Dictionary) -> String: return def["id"])
+	_shuffle(ids, rng)
+	var wanted := rng.randi_range(1, GameData.MAX_STRUGGLES)
+	for id: String in ids:
+		if struggles.size() >= wanted:
+			break
+		if id != gift() and not struggles.has(id):
+			struggles.append(id)
 
 
 func randomize_free_points(rng: RandomNumberGenerator) -> void:
@@ -194,7 +168,7 @@ func randomize_all(rng: RandomNumberGenerator) -> void:
 	randomize_appearance(rng)
 	randomize_name(rng)
 	randomize_temperament(rng)
-	randomize_sins(rng)
+	randomize_struggles(rng)
 	randomize_free_points(rng)
 
 
@@ -217,7 +191,7 @@ func to_dict() -> Dictionary:
 		"full_name": full_name,
 		"temperament": temperament,
 		"appearance": appearance.duplicate(),
-		"sins": sins.duplicate(),
+		"struggles": struggles.duplicate(),
 		"free_points": free_points.duplicate(),
 	}
 
@@ -235,9 +209,20 @@ static func from_dict(data: Dictionary) -> PlayerCharacter:
 		if saved_look.has(id):
 			character.appearance[id] = str(saved_look[id])
 	character.normalize_appearance()
-	var saved_sins: Dictionary = data.get("sins", {})
-	for id: String in character.sins:
-		character.sins[id] = int(saved_sins.get(id, 0))
+	for id in data.get("struggles", []):
+		if not GameData.virtue_def(str(id)).is_empty() and character.struggles.size() < GameData.MAX_STRUGGLES:
+			character.struggles.append(str(id))
+	# Characters made before virtues came in had sins marked instead: each
+	# struggle with a sin becomes a struggle with the virtue against it.
+	if character.struggles.is_empty() and data.get("sins") is Dictionary:
+		var against := {"anger": "patience", "greed": "justice", "envy": "charity", "sloth": "fortitude", "gluttony": "temperance", "lust": "temperance", "pride": "prudence"}
+		var old: Dictionary = data["sins"]
+		for sin_id: String in old:
+			var virtue_id: String = against.get(sin_id, "")
+			if float(old[sin_id]) > 0.0 and not virtue_id.is_empty() and virtue_id != character.gift() and not character.struggles.has(virtue_id) and character.struggles.size() < GameData.MAX_STRUGGLES:
+				character.struggles.append(virtue_id)
+	if character.struggles.is_empty():
+		character.struggles.append(GameData.temperament_def(character.temperament)["hard"])
 	var saved_points: Dictionary = data.get("free_points", {})
 	for id: String in character.free_points:
 		character.free_points[id] = int(saved_points.get(id, 0))
