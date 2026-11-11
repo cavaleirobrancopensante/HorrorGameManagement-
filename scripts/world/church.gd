@@ -154,9 +154,9 @@ func _confessional() -> void:
 	sign_text.position = _p(10.3, 2.85, -3.84)
 	world.add_child(sign_text)
 
-	priest = _person("#141216", true)
-	priest.position = _p(8.4, 0, -3.95)
-	priest.rotation.y = 0.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41
+	priest = People.place(world, People.role("priest", rng), _p(8.4, 0, -3.95), PI / 2.0)
 	var talk := world._zone(Vector3(-0.3, 0.0, -0.3), Vector3(0.3, 1.8, 0.3), "priest", priest)
 	talk.position.y = 0.9
 
@@ -184,8 +184,9 @@ func _side_things() -> void:
 			votive_flames.append(flame)
 	world._zone(_p(14.95, 0, 3.6), _p(16.45, 1.1, 3.75), "votive")
 
-	informant = _person("#55575c", false)
-	informant.position = _p(1.6, 0, -4.2)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	informant = People.place(world, People.role("informant", rng), _p(1.6, 0, -4.2), -PI / 2.0)
 	informant.visible = false
 
 
@@ -194,45 +195,6 @@ func _lights() -> void:
 		world._light(_p(lx, 5.8, 0.0), "#ffd9a0", 1.1, 10.0)
 	world._light(_p(21.0, 4.0, 0.0), "#ffe2b0", 1.4, 8.0)
 	world._light(_p(15.7, 1.4, 3.6), "#ffb560", 0.6, 3.0)
-
-
-## A standing figure, drawn like the customers.
-func _person(shirt: String, collar: bool) -> Node3D:
-	var holder := Node3D.new()
-	world.add_child(holder)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 41 if collar else 77
-	var person := PlayerCharacter.new()
-	person.randomize_appearance(rng)
-	person.appearance["sex"] = "man"
-	person.appearance["age"] = "old" if collar else "grown"
-	person.appearance["facial"] = "none"
-	person.appearance["hair"] = "short"
-	person.appearance["hair_colour"] = "grey" if collar else "black"
-	var canvas := SubViewport.new()
-	canvas.size = Vector2i(80, 320)
-	canvas.transparent_bg = true
-	canvas.disable_3d = true
-	canvas.render_target_update_mode = SubViewport.UPDATE_ONCE
-	var portrait := CharacterPortrait.new()
-	portrait.full_body = true
-	portrait.apron = false
-	portrait.collar = collar
-	portrait.shirt_colour = Color(shirt)
-	portrait.size = Vector2(80, 320)
-	portrait.character = person
-	canvas.add_child(portrait)
-	holder.add_child(canvas)
-	var sprite := Sprite3D.new()
-	sprite.texture = canvas.get_texture()
-	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-	sprite.shaded = true
-	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	sprite.pixel_size = Player.BODY_PIXEL_SIZE
-	sprite.position.y = 320.0 * Player.BODY_PIXEL_SIZE / 2.0
-	holder.add_child(sprite)
-	return holder
 
 
 ## Lights one more votive candle.

@@ -88,10 +88,17 @@ static func surface(kind: String) -> StandardMaterial3D:
 			image = _speckled(Color("#1c1a20"), 0.2, 16, rng)
 		_:
 			image = _speckled(Color.MAGENTA, 0.1, 8, rng)
+	image = _refine(image, rng, kind)
+	var relief := image.duplicate() as Image
+	relief.bump_map_to_normal_map(RELIEF.get(kind, 1.5))
+	relief.generate_mipmaps()
 	image.generate_mipmaps()
 	var material := StandardMaterial3D.new()
 	material.albedo_texture = ImageTexture.create_from_image(image)
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+	material.normal_enabled = true
+	material.normal_texture = ImageTexture.create_from_image(relief)
+	material.normal_scale = 0.7
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS if _retro() else BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	material.uv1_triplanar = true
 	material.uv1_world_triplanar = true
 	material.uv1_scale = Vector3.ONE / metres
@@ -99,6 +106,42 @@ static func surface(kind: String) -> StandardMaterial3D:
 	material.metallic_specular = specular
 	_cache[kind] = material
 	return material
+
+
+## How much each surface's pattern stands out in relief.
+const RELIEF := {"wall_kitchen": 3.0, "wall_bath": 3.0, "floor_tiles": 3.0, "skin": 4.0, "floor_planks": 2.5, "wood": 2.5, "wood_light": 2.5, "asphalt": 2.0, "concrete": 2.0, "ceiling": 2.0, "plastic": 0.4, "steel": 0.8, "steel_dark": 0.8}
+
+
+static func _retro() -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or not tree.root.has_node("Settings"):
+		return false
+	return int(tree.root.get_node("Settings").get("pixel_scale")) >= 3
+
+
+## Four times the pixels, with fine grain and blotches of grime, so surfaces
+## stay crisp up close instead of turning to blocks.
+static func _refine(image: Image, rng: RandomNumberGenerator, kind: String) -> Image:
+	var size := clampi(image.get_width() * 4, 64, 256)
+	# Noise-like surfaces smooth out; patterned ones keep their crisp lines.
+	var smooth := kind in ["asphalt", "concrete", "concrete_dark", "roof", "floor_lino", "rubber", "skirt", "plastic"]
+	image.resize(size, size, Image.INTERPOLATE_CUBIC if smooth else Image.INTERPOLATE_NEAREST)
+	var noise := FastNoiseLite.new()
+	noise.seed = rng.randi()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.frequency = 0.035
+	noise.fractal_octaves = 3
+	var grime := noise.get_seamless_image(size, size)
+	var clean := kind in ["plastic", "steel", "steel_dark", "mattress"]
+	var depth := 0.06 if clean else 0.15
+	for y in size:
+		for x in size:
+			var colour := image.get_pixel(x, y)
+			var blotch := grime.get_pixel(x, y).r
+			var grain := 1.0 + (rng.randf() - 0.5) * 0.08
+			var dirt := 1.0 - maxf(0.0, blotch - 0.45) * depth * 2.0
+			image.set_pixel(x, y, Color(colour.r * grain * dirt, colour.g * grain * dirt, colour.b * grain * dirt))
+	return image
 
 
 static func plain(color: Color, roughness := 1.0) -> StandardMaterial3D:

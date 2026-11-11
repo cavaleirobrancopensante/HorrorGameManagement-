@@ -37,7 +37,30 @@ func _build() -> void:
 	column.add_child(UiKit.heading("Settings"))
 	for row: Array in ROWS:
 		column.add_child(_make_row(row[0], row[1]))
+	column.add_child(_picture_row())
 	column.add_child(UiKit.button("Back", go_back))
+
+
+## Sharp, Crisp or Retro: the size of the game's pixels.
+func _picture_row() -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var title := UiKit.label("Picture")
+	title.custom_minimum_size.x = 150
+	row.add_child(title)
+	var buttons := []
+	for scale: int in Settings.PICTURES:
+		var button := UiKit.button(Settings.PICTURES[scale], func() -> void:
+			Settings.set_pixel_scale(scale)
+			for b: Button in buttons:
+				b.button_pressed = b.get_meta("scale") == Settings.pixel_scale)
+		button.toggle_mode = true
+		button.set_meta("scale", scale)
+		button.button_pressed = scale == Settings.pixel_scale
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		buttons.append(button)
+		row.add_child(button)
+	return row
 
 
 func _make_row(channel: String, title: String) -> Control:
